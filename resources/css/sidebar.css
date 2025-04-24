@@ -1,3 +1,6 @@
+/* Add your existing sidebar CSS here */
+
+/* Smoke Animation CSS */
 .smoke-animation {
     position: absolute;
     top: 0;
@@ -23,4 +26,10 @@
     100% {
         transform: translate(-10%, -10%) scale(1);
     }
+}
+
+/* Additional styles to enhance the look with the smoke effect */
+.menu-item:hover {
+    backdrop-filter: blur(4px);
+    background-color: rgba(255, 255, 255, 0.8);
 }
