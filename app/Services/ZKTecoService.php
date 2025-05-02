@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Libraries\ZKTeco\ZKLib;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\File;
 
 class ZKTecoService
 {
@@ -14,9 +15,40 @@ class ZKTecoService
     
     public function __construct($ip, $port = 4370)
     {
+        // Create log directories first to prevent errors
+        $this->createZKTecoLogDirectories();
+        
         $this->ip = $ip;
         $this->port = $port;
         $this->zk = new ZKLib($ip, $port);
+    }
+    
+    /**
+     * Create necessary log directories for ZKTeco library
+     */
+    private function createZKTecoLogDirectories(): void
+    {
+        // Check and create Rats\ZKTeco logs directory if it's used
+        $ratsZktecoLogsPath = base_path('vendor/rats/zkteco/src/Lib/logs');
+        if (!File::exists($ratsZktecoLogsPath)) {
+            try {
+                File::makeDirectory($ratsZktecoLogsPath, 0755, true);
+                Log::info('Created missing ZKTeco logs directory at: ' . $ratsZktecoLogsPath);
+            } catch (\Exception $e) {
+                Log::warning('Failed to create ZKTeco logs directory: ' . $e->getMessage());
+            }
+        }
+        
+        // Check and create App\Libraries\ZKTeco logs directory if needed
+        $appZktecoLogsPath = base_path('app/Libraries/ZKTeco/logs');
+        if (!File::exists($appZktecoLogsPath)) {
+            try {
+                File::makeDirectory($appZktecoLogsPath, 0755, true);
+                Log::info('Created ZKLib logs directory at: ' . $appZktecoLogsPath);
+            } catch (\Exception $e) {
+                Log::warning('Failed to create ZKLib logs directory: ' . $e->getMessage());
+            }
+        }
     }
     
     public function getZk()
@@ -123,6 +155,7 @@ class ZKTecoService
             throw $e;
         }
     }
+    
     public function reconnect()
     {
         $this->disconnect();

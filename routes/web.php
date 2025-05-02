@@ -21,6 +21,7 @@ use App\Http\Controllers\ProcessedAttendanceController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 // Public Routes
@@ -135,7 +136,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('biometric-devices.fetch-logs');
         Route::post('/biometric-devices/diagnostic', [BiometricController::class, 'diagnosticTest'])
             ->name('biometric-devices.diagnostic');
-        
+            Route::post('/biometric-devices/scan-network', [BiometricController::class, 'scanNetwork'])
+            ->name('biometric-devices.scan-network');
+        Route::get('/biometric-devices/scan-progress/{scanId}', [BiometricController::class, 'scanProgress'])
+            ->name('biometric-devices.scan-progress');
+            Route::get('/api/client-ip', function (Request $request) {
+                return response()->json(['ip' => $request->ip()]);
+            })->name('api.client-ip');
+            
         // Timesheet Routes
         /* Route::get('/timesheet/import', [BiometricController::class, 'importForm'])
             ->name('timesheet.import');

@@ -14,6 +14,8 @@ use Inertia\Inertia;
 use App\Services\ZKTecoService;
 use App\Libraries\ZKTeco\ZKLib;
 use Rats\Zkteco\Lib\ZKTeco; 
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Cache; // Add this import
 class BiometricController extends Controller
 {
     /**
@@ -279,29 +281,50 @@ public function testConnection(Request $request)
     /**
      * Fetch attendance logs from a biometric device.
      */
-    public function fetchLogs(Request $request)
-    {
-        // Validate the request
-        $validated = $request->validate([
-            'device_id' => 'required|exists:biometric_devices,id',
+    /**
+ * Fetch attendance logs from a biometric device.
+ */
+public function fetchLogs(Request $request)
+{
+    // Validate the request
+    $validated = $request->validate([
+        'device_id' => 'required|exists:biometric_devices,id',
+        'start_date' => 'nullable|date',
+        'end_date' => 'nullable|date|after_or_equal:start_date',
+    ]);
+    
+    try {
+        // Get the device
+        $device = BiometricDevice::findOrFail($validated['device_id']);
+        
+        Log::info('Attempting to connect to ZKTeco device', [
+            'device_name' => $device->name,
+            'ip' => $device->ip_address,
+            'port' => $device->port
         ]);
         
+        // Increase execution time and memory limit for this request
+        set_time_limit(0);
+        ini_set('memory_limit', '1024M');
+        
+        // Create ZKTeco instance
+        $zk = new ZKTeco($device->ip_address, $device->port);
+        
+        // Try to connect with timeout
+        $connectStart = microtime(true);
+        $connectTimeout = 10; // 10 seconds timeout
+        
         try {
-            // Get the device
-            $device = BiometricDevice::findOrFail($validated['device_id']);
+            $connected = false;
+            while (!$connected && (microtime(true) - $connectStart) < $connectTimeout) {
+                $connected = $zk->connect();
+                if (!$connected) {
+                    usleep(500000); // Wait 500ms before retrying
+                }
+            }
             
-            Log::info('Attempting to connect to ZKTeco device', [
-                'device_name' => $device->name,
-                'ip' => $device->ip_address,
-                'port' => $device->port
-            ]);
-            
-            // Create ZKTeco instance
-            $zk = new ZKTeco($device->ip_address, $device->port);
-            
-            // Try to connect 
-            if (!$zk->connect()) {
-                Log::error('Failed to connect to the device', [
+            if (!$connected) {
+                Log::error('Failed to connect to the device after multiple attempts', [
                     'device_name' => $device->name,
                     'ip' => $device->ip_address,
                     'port' => $device->port
@@ -309,228 +332,933 @@ public function testConnection(Request $request)
                 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to connect to the device'
+                    'message' => 'Failed to connect to the device after multiple attempts'
                 ], 400);
             }
-            
-            Log::info('Successfully connected to device, retrieving attendance data');
-            
-            // Get attendance logs
-            $logs = $zk->getAttendance();
-            
-            // Disconnect from device
-            $zk->disconnect();
-            
-            // Validate and save logs
-            $saveResult = $this->saveBiometricLogs($logs, $device->id);
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Successfully fetched and saved logs',
-                'log_summary' => $saveResult
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Comprehensive error fetching device logs', [
-                'error_message' => $e->getMessage(),
-                'error_trace' => $e->getTraceAsString()
+        } catch (\Exception $connectEx) {
+            Log::error('Connection attempt failed', [
+                'error' => $connectEx->getMessage(),
+                'device_name' => $device->name,
+                'ip' => $device->ip_address
             ]);
             
             return response()->json([
                 'success' => false,
-                'message' => 'Error: ' . $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'message' => 'Connection error: ' . $connectEx->getMessage()
+            ], 400);
+        }
+        
+        Log::info('Successfully connected to device, retrieving attendance data');
+        
+        // Retrieve logs with memory-efficient approach
+        try {
+            // Modified to handle date range filtering
+            $logs = $this->getAttendanceLogsWithMemoryManagement($zk, $validated);
+        } catch (\Exception $logEx) {
+            Log::error('Error retrieving logs', [
+                'error' => $logEx->getMessage(),
+                'device_name' => $device->name
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve logs: ' . $logEx->getMessage()
             ], 500);
+        } finally {
+            // Ensure device is disconnected
+            try {
+                $zk->disconnect();
+            } catch (\Exception $disconnectEx) {
+                Log::warning('Error during device disconnection', [
+                    'error' => $disconnectEx->getMessage()
+                ]);
+            }
+        }
+        
+        // Save to JSON file
+        try {
+            $this->saveLogsToJsonFile($logs, $device);
+        } catch (\Exception $jsonEx) {
+            Log::error('Failed to save logs to JSON', [
+                'error' => $jsonEx->getMessage()
+            ]);
+        }
+        
+        // Validate and save logs to database
+        try {
+            $saveResult = $this->saveBiometricLogs($logs, $device->id);
+        } catch (\Exception $saveEx) {
+            Log::error('Failed to save biometric logs', [
+                'error' => $saveEx->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error saving logs: ' . $saveEx->getMessage()
+            ], 500);
+        }
+        
+        // Update the last_sync timestamp for the device
+      // Update the last_sync timestamp for the device
+$device->last_sync = now();
+$device->save();
+
+Log::info('Updated device last_sync timestamp', [
+    'device_id' => $device->id,
+    'device_name' => $device->name,
+    'last_sync' => $device->last_sync
+]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Successfully fetched and saved logs',
+            'log_summary' => $saveResult
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Comprehensive error fetching device logs', [
+            'error_message' => $e->getMessage(),
+            'error_trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Unexpected error: ' . $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+}
+  /**
+ * Save attendance logs to a JSON file with time-based status determination
+ * 
+ * @param array $logs The attendance logs from the device
+ * @param BiometricDevice $device The device information
+ * @return bool
+ */
+
+ private function getAttendanceLogsWithMemoryManagement($zk, $validated)
+{
+    // Attempt to get logs with multiple strategies
+    $maxAttempts = 3;
+    $attempts = 0;
+    
+    while ($attempts < $maxAttempts) {
+        try {
+            // First attempt: standard method
+            $logs = $zk->getAttendance();
+            
+            // Quick validation
+            if (!is_array($logs)) {
+                throw new \Exception('Retrieved logs is not an array');
+            }
+            
+            // Optional: Filter out invalid logs
+            $logs = array_filter($logs, function($log) {
+                return isset($log['id']) && isset($log['timestamp']);
+            });
+            
+            // Date range filtering
+            if (!empty($validated['start_date']) || !empty($validated['end_date'])) {
+                $logs = array_filter($logs, function($log) use ($validated) {
+                    $logTimestamp = strtotime($log['timestamp']);
+                    
+                    // If only start_date is provided
+                    if (!empty($validated['start_date']) && empty($validated['end_date'])) {
+                        $startTimestamp = strtotime($validated['start_date']);
+                        return $logTimestamp >= $startTimestamp;
+                    }
+                    
+                    // If only end_date is provided
+                    if (empty($validated['start_date']) && !empty($validated['end_date'])) {
+                        $endTimestamp = strtotime($validated['end_date'] . ' 23:59:59');
+                        return $logTimestamp <= $endTimestamp;
+                    }
+                    
+                    // If both start_date and end_date are provided
+                    if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+                        $startTimestamp = strtotime($validated['start_date']);
+                        $endTimestamp = strtotime($validated['end_date'] . ' 23:59:59');
+                        
+                        return $logTimestamp >= $startTimestamp && $logTimestamp <= $endTimestamp;
+                    }
+                    
+                    // If no dates are provided, return all logs
+                    return true;
+                });
+            }
+            
+            // Log number of logs retrieved
+            Log::info('Logs retrieved successfully', [
+                'total_logs' => count($logs),
+                'start_date' => $validated['start_date'] ?? 'Not specified',
+                'end_date' => $validated['end_date'] ?? 'Not specified'
+            ]);
+            
+            return $logs;
+        } catch (\Exception $e) {
+            $attempts++;
+            
+            Log::warning("Attempt $attempts to retrieve logs failed", [
+                'error' => $e->getMessage()
+            ]);
+            
+            // Wait between attempts
+            if ($attempts < $maxAttempts) {
+                sleep(2); // Wait 2 seconds between attempts
+            }
+        }
+    }
+    
+    // If all attempts fail
+    throw new \Exception('Failed to retrieve logs after ' . $maxAttempts . ' attempts');
+}
+private function saveLogsToJsonFile($logs, $device)
+{
+    try {
+        // Create timestamp for the filename
+        $timestamp = now()->format('Y-m-d_H-i-s');
+        
+        // Create directory if it doesn't exist
+        $directory = storage_path('logs/biometric');
+        if (!File::exists($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+        
+        // Process logs with pattern recognition
+        $processedLogs = $this->processLogsWithPatternRecognition($logs);
+        
+        // Prepare log data with metadata
+        // Check for missing punches in the logs for reporting
+    $missingPunchCount = 0;
+    foreach ($processedLogs as $log) {
+        if (isset($log['missing_punch']) && $log['missing_punch']) {
+            $missingPunchCount++;
+        }
+    }
+        
+    $logData = [
+        'device_info' => [
+            'id' => $device->id,
+            'name' => $device->name,
+            'ip_address' => $device->ip_address,
+            'port' => $device->port
+        ],
+        'timestamp' => now()->toDateTimeString(),
+        'note' => 'Actual status is determined by pattern recognition that intelligently handles various clock-in scenarios and detects missing punches.',
+        'missing_punch_count' => $missingPunchCount,
+        'attendance_logs' => $processedLogs
+    ];
+        
+        // Write to file
+        $filename = $directory . '/device_' . $device->id . '_' . $device->name . '_' . $timestamp . '.json';
+        File::put($filename, json_encode($logData, JSON_PRETTY_PRINT));
+        
+        Log::info('Successfully saved logs to JSON file', [
+            'filename' => $filename,
+            'log_count' => count($processedLogs)
+        ]);
+        
+        return true;
+    } catch (\Exception $e) {
+        Log::error('Failed to save logs to JSON file', [
+            'error_message' => $e->getMessage(),
+            'error_trace' => $e->getTraceAsString()
+        ]);
+        
+        return false;
+    }
+}
+
+    
+private function saveBiometricLogs($logs, $deviceId)
+{
+    $savedLogs = [];
+    $processedLogs = 0;
+    $skippedLogs = 0;
+    $skippedEmployees = [];
+    $detailedSkippedLogs = [];
+
+    if (!is_array($logs)) {
+        Log::warning('Logs is not an array', ['logs' => $logs]);
+        return [
+            'saved_logs' => [],
+            'processed_count' => 0,
+            'skipped_count' => 1
+        ];
+    }
+
+    $deviceIp = BiometricDevice::findOrFail($deviceId)->ip_address;
+
+    Log::info('Total Logs to Process', [
+        'log_count' => count($logs)
+    ]);
+
+    // Process logs with improved pattern recognition logic
+    $processedLogsWithStatus = $this->processLogsWithPatternRecognition($logs);
+
+    // Group by employee and date using your existing structure but enhanced
+    $groupedLogs = [];
+    foreach ($processedLogsWithStatus as $log) {
+        try {
+            $extractedLog = $this->extractLogDetails($log);
+            
+            // Ensure actual_status is included from processed log
+            $actualStatus = $log['actual_status'] ?? null;
+
+            if (!$this->isValidLog($extractedLog)) {
+                Log::warning('Invalid log skipped', ['log' => $log]);
+                $skippedLogs++;
+                continue;
+            }
+
+            $biometricId = $extractedLog['user_id'];
+            $employee = Employee::where('idno', $biometricId)->first();
+
+            if (!$employee) {
+                if (!in_array($biometricId, $skippedEmployees)) {
+                    $skippedEmployees[] = $biometricId;
+                    $detailedSkippedLogs[] = [
+                        'biometric_id' => $biometricId,
+                        'timestamp' => $extractedLog['timestamp'],
+                        'full_log' => $log
+                    ];
+                    Log::warning('Employee not found with given ID number', [
+                        'idno' => $biometricId,
+                        'timestamp' => $extractedLog['timestamp']
+                    ]);
+                }
+                $skippedLogs++;
+                continue;
+            }
+
+            $timestamp = Carbon::parse($extractedLog['timestamp']);
+            $date = $timestamp->format('Y-m-d');
+
+            if (!isset($groupedLogs[$employee->id][$date])) {
+                $groupedLogs[$employee->id][$date] = [
+                    'timestamps' => [],
+                    'states' => [],
+                    'actual_statuses' => [] // Store the calculated status
+                ];
+            }
+
+            $groupedLogs[$employee->id][$date]['timestamps'][] = $timestamp;
+            $groupedLogs[$employee->id][$date]['states'][] = $extractedLog['state'] ?? null;
+            $groupedLogs[$employee->id][$date]['actual_statuses'][] = $actualStatus;
+        } catch (\Exception $e) {
+            Log::error('Error processing individual log', [
+                'log' => $log,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $skippedLogs++;
         }
     }
 
-    private function saveBiometricLogs($logs, $deviceId)
-    {
-        $savedLogs = [];
-        $processedLogs = 0;
-        $skippedLogs = 0;
-        $skippedEmployees = [];
-        $detailedSkippedLogs = [];
-    
-        if (!is_array($logs)) {
-            Log::warning('Logs is not an array', ['logs' => $logs]);
-            return [
-                'saved_logs' => [],
-                'processed_count' => 0,
-                'skipped_count' => 1
-            ];
-        }
-    
-        $deviceIp = BiometricDevice::findOrFail($deviceId)->ip_address;
-    
-        Log::info('Total Logs to Process', [
-            'log_count' => count($logs)
-        ]);
-    
-        $groupedLogs = [];
-        foreach ($logs as $log) {
+    foreach ($groupedLogs as $employeeId => $dates) {
+        foreach ($dates as $date => $logData) {
             try {
-                $extractedLog = $this->extractLogDetails($log);
-    
-                if (!$this->isValidLog($extractedLog)) {
-                    Log::warning('Invalid log skipped', ['log' => $log]);
-                    $skippedLogs++;
-                    continue;
-                }
-    
-                $biometricId = $extractedLog['user_id'];
-                $employee = Employee::where('idno', $biometricId)->first();
-    
-                if (!$employee) {
-                    if (!in_array($biometricId, $skippedEmployees)) {
-                        $skippedEmployees[] = $biometricId;
-                        $detailedSkippedLogs[] = [
-                            'biometric_id' => $biometricId,
-                            'timestamp' => $extractedLog['timestamp'],
-                            'full_log' => $log
-                        ];
-                        Log::warning('Employee not found with given ID number', [
-                            'idno' => $biometricId,
-                            'timestamp' => $extractedLog['timestamp']
-                        ]);
+                $timestamps = $logData['timestamps'];
+                $states = $logData['states'];
+                $actualStatuses = $logData['actual_statuses']; // Use the actual status
+
+                // Sort all arrays based on timestamp
+                array_multisort($timestamps, SORT_ASC, $states, $actualStatuses);
+
+                // Initialize variables for time tracking
+                $totalWorkedMinutes = 0;
+                $punchIn = null;
+                $timeIn = null;
+                $timeOut = null;
+                $breakIn = null;
+                $breakOut = null;
+
+                // Process timestamps based on actual status
+                for ($i = 0; $i < count($timestamps); $i++) {
+                    $currentTime = $timestamps[$i];
+                    $currentActualStatus = $actualStatuses[$i];
+
+                    // Process based on actual status (not device state)
+                    switch ($currentActualStatus) {
+                        case 'Clock In':
+                            if ($timeIn === null) {
+                                $timeIn = $currentTime;
+                            }
+                            $punchIn = $currentTime;
+                            break;
+                            
+                        case 'Clock Out':
+                            $timeOut = $currentTime;
+                            if ($punchIn !== null) {
+                                $workedMinutes = $punchIn->diffInMinutes($currentTime);
+                                $totalWorkedMinutes += $workedMinutes;
+                                
+                                Log::info("Counted work session for employee $employeeId", [
+                                    'from' => $punchIn->toDateTimeString(),
+                                    'to' => $currentTime->toDateTimeString(),
+                                    'minutes' => $workedMinutes,
+                                ]);
+                                
+                                $punchIn = null;
+                            }
+                            break;
+                            
+                        case 'Break In':
+                            $breakIn = $currentTime;
+                            if ($punchIn !== null) {
+                                // If they were clocked in, count work up to break
+                                $workedMinutes = $punchIn->diffInMinutes($currentTime);
+                                $totalWorkedMinutes += $workedMinutes;
+                                $punchIn = null;
+                            }
+                            break;
+                            
+                        case 'Break Out':
+                            $breakOut = $currentTime;
+                            // Resume work timing after break
+                            $punchIn = $currentTime;
+                            break;
                     }
-                    $skippedLogs++;
-                    continue;
                 }
-    
-                $timestamp = Carbon::parse($extractedLog['timestamp']);
-                $date = $timestamp->format('Y-m-d');
-    
-                if (!isset($groupedLogs[$employee->id][$date])) {
-                    $groupedLogs[$employee->id][$date] = [
-                        'timestamps' => [],
-                        'states' => []
-                    ];
+
+                // If timeIn is still null, use first timestamp regardless
+                if ($timeIn === null && count($timestamps) > 0) {
+                    $timeIn = $timestamps[0];
                 }
-    
-                $groupedLogs[$employee->id][$date]['timestamps'][] = $timestamp;
-                $groupedLogs[$employee->id][$date]['states'][] = $extractedLog['state'] ?? null;
+                
+                // Handle missing checkout differently - don't set timeOut if it's likely
+                // that the employee is still at work (hasn't checked out yet)
+                if ($timeOut === null && count($timestamps) > 0) {
+                    // Check if the last punch was Clock In or Break Out (indicating they're still at work)
+                    $lastStatus = end($actualStatuses);
+                    if ($lastStatus === 'Clock In' || $lastStatus === 'Break Out') {
+                        // Employee is still at work - leave timeOut as null to indicate ongoing shift
+                        $timeOut = null;
+                        $notesText = 'ATTENTION - Employee is still clocked in. No checkout recorded.';
+                    } else {
+                        // If last status was not Clock In or Break Out, use last timestamp as timeOut
+                        $timeOut = end($timestamps);
+                    }               
+                }
+
+                // Calculate hours only if we have both timeIn and timeOut
+                $hoursWorked = null;
+                $isNightShift = false;
+                
+                if ($timeIn && $timeOut) {
+                    $hoursWorked = round($totalWorkedMinutes / 60, 2);
+                    $isNightShift = $timeIn->format('Y-m-d') !== $timeOut->format('Y-m-d');
+                }
+
+                // Check for missing punches in the logs
+                $missingPunchNotes = [];
+                foreach ($actualStatuses as $idx => $status) {
+                    $missingPunch = $processedLogsWithStatus[$idx]['missing_punch'] ?? false;
+                    $missingPunchNote = $processedLogsWithStatus[$idx]['missing_punch_note'] ?? '';
+                    if ($missingPunch && !empty($missingPunchNote)) {
+                        $missingPunchNotes[] = $missingPunchNote;
+                    }
+                }
+                
+                // Create notes from missing punch information
+                $notesText = 'Processed with pattern recognition';
+                if (!empty($missingPunchNotes)) {
+                    $notesText .= '. ATTENTION - ' . implode(' ', $missingPunchNotes);
+                }
+                
+                $logEntry = [
+                    'employee_id' => $employeeId,
+                    'attendance_date' => $date,
+                    'time_in' => $timeIn,
+                    'time_out' => $timeOut,
+                    'break_in' => $breakIn, // Add break tracking
+                    'break_out' => $breakOut, // Add break tracking
+                    'hours_worked' => $hoursWorked,
+                    'is_nightshift' => $isNightShift,
+                    'source' => 'biometric',
+                    'notes' => $notesText,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+
+                $existingRecord = DB::table('processed_attendances')
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $date)
+                    ->first();
+
+                if ($existingRecord) {
+                    DB::table('processed_attendances')
+                        ->where('id', $existingRecord->id)
+                        ->update($logEntry);
+                } else {
+                    DB::table('processed_attendances')->insert($logEntry);
+                }
+
+                $processedLogs++;
+                $savedLogs[] = $logEntry;
             } catch (\Exception $e) {
-                Log::error('Error processing individual log', [
-                    'log' => $log,
+                Log::error('Error processing grouped logs for employee', [
+                    'employee_id' => $employeeId,
+                    'date' => $date,
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString()
                 ]);
                 $skippedLogs++;
             }
         }
-    
-        foreach ($groupedLogs as $employeeId => $dates) {
-            foreach ($dates as $date => $logData) {
-                try {
-                    $timestamps = $logData['timestamps'];
-                    $states = $logData['states'];
-    
-                    array_multisort($timestamps, SORT_ASC, $states);
-    
-                    $totalWorkedMinutes = 0;
-                    $punchIn = null;
-    
-                    for ($i = 0; $i < count($timestamps); $i++) {
-                        $currentTime = $timestamps[$i];
-                        $currentState = $states[$i];
-    
-                        if ($currentState == 0) { // IN
-                            $punchIn = $currentTime;
-                        } elseif ($currentState == 1 && $punchIn !== null) { // OUT
-                            $workedMinutes = $punchIn->diffInMinutes($currentTime);
-                            $totalWorkedMinutes += $workedMinutes;
-    
-                            Log::info("Counted work session for employee $employeeId", [
-                                'from' => $punchIn->toDateTimeString(),
-                                'to' => $currentTime->toDateTimeString(),
-                                'minutes' => $workedMinutes,
-                            ]);
-    
-                            $punchIn = null;
-                        }
-                    }
-    
-                    $timeIn = $timestamps[0];
-                    $timeOut = end($timestamps);
-                    $hoursWorked = round($totalWorkedMinutes / 60, 2);
-                    $isNightShift = $timeIn->format('Y-m-d') !== $timeOut->format('Y-m-d');
-    
-                    $logEntry = [
-                        'employee_id' => $employeeId,
-                        'attendance_date' => $date,
-                        'time_in' => $timeIn,
-                        'time_out' => $timeOut,
-                        'hours_worked' => $hoursWorked,
-                        'is_nightshift' => $isNightShift,
-                        'source' => 'biometric',
-                        'notes' => 'Processed with dynamic breaks',
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
-    
-                    $existingRecord = DB::table('processed_attendances')
-                        ->where('employee_id', $employeeId)
-                        ->where('attendance_date', $date)
-                        ->first();
-    
-                    if ($existingRecord) {
-                        DB::table('processed_attendances')
-                            ->where('id', $existingRecord->id)
-                            ->update($logEntry);
-                    } else {
-                        DB::table('processed_attendances')->insert($logEntry);
-                    }
-    
-                    $processedLogs++;
-                    $savedLogs[] = $logEntry;
-                } catch (\Exception $e) {
-                    Log::error('Error processing grouped logs for employee', [
-                        'employee_id' => $employeeId,
-                        'date' => $date,
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                    $skippedLogs++;
-                }
-            }
+    }
+
+    Log::info('Biometric Logs Processing Summary', [
+        'total_logs' => count($logs),
+        'processed_logs' => $processedLogs,
+        'skipped_logs' => $skippedLogs,
+        'skipped_employees' => $skippedEmployees,
+        'detailed_skipped_logs' => $detailedSkippedLogs
+    ]);
+
+    return [
+        'saved_logs' => $savedLogs,
+        'processed_count' => $processedLogs,
+        'skipped_count' => $skippedLogs,
+        'skipped_employees' => $skippedEmployees,
+        'detailed_skipped_logs' => $detailedSkippedLogs
+    ];
+}
+
+/**
+ * Process logs with pattern recognition logic - handles multiple patterns intelligently
+ * 
+ * @param array $logs The attendance logs from the device
+ * @return array Processed logs with accurate status
+ */
+private function processLogsWithPatternRecognition($logs)
+{
+    // Group logs by employee ID
+    $employeeLogs = [];
+    foreach ($logs as $log) {
+        $employeeId = $log['id'];
+        if (!isset($employeeLogs[$employeeId])) {
+            $employeeLogs[$employeeId] = [];
         }
-    
-        Log::info('Biometric Logs Processing Summary', [
-            'total_logs' => count($logs),
-            'processed_logs' => $processedLogs,
-            'skipped_logs' => $skippedLogs,
-            'skipped_employees' => $skippedEmployees,
-            'detailed_skipped_logs' => $detailedSkippedLogs
-        ]);
-    
-        return [
-            'saved_logs' => $savedLogs,
-            'processed_count' => $processedLogs,
-            'skipped_count' => $skippedLogs,
-            'skipped_employees' => $skippedEmployees,
-            'detailed_skipped_logs' => $detailedSkippedLogs
-        ];
+        $employeeLogs[$employeeId][] = $log;
     }
     
-    private function extractLogDetails($log)
+    // Process logs with pattern recognition
+    $processedLogs = [];
+    foreach ($employeeLogs as $employeeId => $empLogs) {
+        // Sort logs by timestamp
+        usort($empLogs, function($a, $b) {
+            return strtotime($a['timestamp']) - strtotime($b['timestamp']);
+        });
+        
+        $currentDate = '';
+        $dailyPunches = [];
+        
+        // First group punches by day
+        foreach ($empLogs as $log) {
+            $logDate = date('Y-m-d', strtotime($log['timestamp']));
+            
+            if ($logDate !== $currentDate) {
+                // Process previous day's punches if any
+                if (!empty($dailyPunches)) {
+                    $processedDailyLogs = $this->processDailyPattern($dailyPunches);
+                    $processedLogs = array_merge($processedLogs, $processedDailyLogs);
+                }
+                
+                $currentDate = $logDate;
+                $dailyPunches = [];
+            }
+            
+            $dailyPunches[] = $log;
+        }
+        
+        // Process the last day's punches
+        if (!empty($dailyPunches)) {
+            $processedDailyLogs = $this->processDailyPattern($dailyPunches);
+            $processedLogs = array_merge($processedLogs, $processedDailyLogs);
+        }
+    }
+    
+    return $processedLogs;
+}
+
+/**
+ * Process a single day's punch pattern
+ * 
+ * @param array $logs The day's attendance logs for one employee
+ * @return array Processed logs with accurate status
+ */
+private function processDailyPattern($logs)
+    {
+        $count = count($logs);
+        $processedLogs = [];
+        
+        // Handle case of odd number of punches which might indicate forgotten clock in/out
+        $possibleMissingPunch = ($count % 2 != 0);
+        $workdayStartTime = 8 * 60; // 8:00 AM in minutes from midnight
+        $workdayEndTime = 17 * 60;  // 5:00 PM in minutes from midnight
+        $standardShiftDuration = 8 * 60; // 8 hours in minutes
+        
+        // Keep original values for all logs
+        foreach ($logs as $i => $log) {
+            $log['original_state'] = $log['state'] ?? null;
+            $log['device_status'] = isset($log['state']) ? 
+                ($log['state'] == 1 ? 'Device reported: Clock Out' : 'Device reported: Clock In') : 
+                'Unknown';
+            
+            // Get time of day in minutes for this punch
+            $timestamp = strtotime($log['timestamp']);
+            $timeOfDay = (date('H', $timestamp) * 60) + date('i', $timestamp);
+            
+            // Determine pattern based on number of punches and position
+            if ($count == 1) {
+                // Only one punch for the day - determine if it's likely clock in or clock out
+                // based on time of day
+                if ($timeOfDay < 12 * 60) { // Before noon, assume clock in
+                    $log['actual_status'] = 'Clock In';
+                    $log['missing_punch'] = true;
+                    $log['missing_punch_note'] = 'Single punch detected. Assumed as Clock In based on time.';
+                } else { // After noon, assume clock out
+                    $log['actual_status'] = 'Clock Out';
+                    $log['missing_punch'] = true;
+                    $log['missing_punch_note'] = 'Single punch detected. Assumed as Clock Out based on time.';
+                }
+            }
+            else if ($count == 2) {
+                // Simple in/out pattern
+                $log['actual_status'] = ($i == 0) ? 'Clock In' : 'Clock Out';
+            } 
+            else if ($count == 3) {
+                // Odd number of punches - someone likely forgot to clock in or out
+                // Determine the most likely pattern based on times
+                
+                // Get all times as minutes from midnight for easier comparison
+                $times = array_map(function($punchLog) {
+                    $ts = strtotime($punchLog['timestamp']);
+                    return (date('H', $ts) * 60) + date('i', $ts);
+                }, $logs);
+                
+                // Calculate time differences between punches
+                $diff1 = $times[1] - $times[0];
+                $diff2 = $times[2] - $times[1];
+                
+                // Case 1: Missing first Clock In
+                if ($times[0] > $workdayStartTime + 120) { // First punch is well after start time
+                    if ($i == 0) {
+                        $log['actual_status'] = 'Break In';
+                        $log['missing_punch'] = true;
+                        $log['missing_punch_note'] = 'Possible missing Clock In at start of day.';
+                    } else if ($i == 1) {
+                        $log['actual_status'] = 'Break Out';
+                    } else {
+                        $log['actual_status'] = 'Clock Out';
+                    }
+                }
+                // Case 2: Missing last Clock Out
+                else if ($times[2] < $workdayEndTime - 120) { // Last punch is well before end time
+                    if ($i == 0) {
+                        $log['actual_status'] = 'Clock In';
+                    } else if ($i == 1) {
+                        $log['actual_status'] = 'Break In';
+                    } else {
+                        $log['actual_status'] = 'Break Out';
+                        $log['missing_punch'] = true;
+                        $log['missing_punch_note'] = 'Possible missing Clock Out at end of day.';
+                    }
+                }
+                // Case 3: Missing middle punch (Break In or Break Out)
+                else {
+                    // Compare time differences to guess the missing punch
+                    if ($diff1 > $diff2 && $diff1 > 180) { // Big gap between 1st and 2nd
+                        if ($i == 0) {
+                            $log['actual_status'] = 'Clock In';
+                        } else if ($i == 1) {
+                            $log['actual_status'] = 'Break Out';
+                            $log['missing_punch'] = true;
+                            $log['missing_punch_note'] = 'Possible missing Break In before this punch.';
+                        } else {
+                            $log['actual_status'] = 'Clock Out';
+                        }
+                    } else if ($diff2 > $diff1 && $diff2 > 180) { // Big gap between 2nd and 3rd
+                        if ($i == 0) {
+                            $log['actual_status'] = 'Clock In';
+                        } else if ($i == 1) {
+                            $log['actual_status'] = 'Break In';
+                            $log['missing_punch'] = true;
+                            $log['missing_punch_note'] = 'Possible missing Break Out after this punch.';
+                        } else {
+                            $log['actual_status'] = 'Clock Out';
+                        }
+                    } else {
+                        // Default pattern if we can't determine better
+                        if ($i == 0) {
+                            $log['actual_status'] = 'Clock In';
+                        } else if ($i == 1) {
+                            $log['actual_status'] = 'Break In';
+                        } else {
+                            $log['actual_status'] = 'Clock Out';
+                            $log['missing_punch_note'] = 'Odd number of punches, pattern unclear.';
+                        }
+                    }
+                }
+            }
+            else if ($count == 4) {
+                // Could be either:
+                // Pattern 1: Clock In, Clock Out, Clock In, Clock Out
+                // Pattern 2: Clock In, Break In, Break Out, Clock Out
+                
+                // Check time gaps to differentiate
+                if ($i > 0) {
+                    $currentTime = strtotime($log['timestamp']);
+                    $prevTime = strtotime($logs[$i-1]['timestamp']);
+                    $gapMinutes = ($currentTime - $prevTime) / 60;
+                    
+                    // For 4-punch pattern, use time gaps to determine if it's a break or a re-entry
+                    // If the gap between punch 2 and 3 is large (e.g. > 30 min), 
+                    // likely pattern #1: Clock In, Clock Out, Clock In, Clock Out
+                    if ($i == 2 && $gapMinutes > 30) {
+                        $patternType = "DOUBLE_SHIFT";
+                    } else {
+                        $patternType = "WITH_BREAK";
+                    }
+                }
+                
+                if ($i == 0) {
+                    $log['actual_status'] = 'Clock In';
+                } 
+                else if ($i == 3) {
+                    $log['actual_status'] = 'Clock Out';
+                }
+                else if ($i == 1) {
+                    $log['actual_status'] = isset($patternType) && $patternType == "DOUBLE_SHIFT" ? 
+                        'Clock Out' : 'Break In';
+                }
+                else if ($i == 2) {
+                    $log['actual_status'] = isset($patternType) && $patternType == "DOUBLE_SHIFT" ? 
+                        'Clock In' : 'Break Out';
+                }
+            } 
+            else if ($possibleMissingPunch) {
+                // Odd number of punches > 4 - likely missing a punch somewhere
+                // Use a combination of timeOfDay, position, and adjacent gaps to determine status
+                
+                // First and last are still easy to determine
+                if ($i == 0) {
+                    $log['actual_status'] = 'Clock In';
+                } 
+                else if ($i == $count - 1) {
+                    $log['actual_status'] = 'Clock Out';
+                }
+                // For middle punches, look at surrounding time gaps to detect anomalies
+                else {
+                    $currentTime = strtotime($log['timestamp']);
+                    
+                    // Check previous gap
+                    $prevTime = strtotime($logs[$i-1]['timestamp']);
+                    $prevGapMinutes = ($currentTime - $prevTime) / 60;
+                    
+                    // Check next gap if not the last punch
+                    $nextGapMinutes = 0;
+                    if ($i < $count - 1) {
+                        $nextTime = strtotime($logs[$i+1]['timestamp']);
+                        $nextGapMinutes = ($nextTime - $currentTime) / 60;
+                    }
+                    
+                    // Look for unusually large gaps (might indicate missing punch)
+                    $largeGapThreshold = 120; // 2 hours
+                    $anomalousPrevGap = ($prevGapMinutes > $largeGapThreshold);
+                    $anomalousNextGap = ($nextGapMinutes > $largeGapThreshold);
+                    
+                    // If large gap before this punch, might indicate missing punch before
+                    if ($anomalousPrevGap && $i > 1) {
+                        // The expected status alternates, so check what the previous punch was
+                        $prevStatus = $processedLogs[count($processedLogs)-1]['actual_status'];
+                        
+                        if ($prevStatus == 'Clock In' || $prevStatus == 'Break Out') {
+                            $log['actual_status'] = 'Clock Out';
+                            $log['missing_punch'] = true;
+                            $log['missing_punch_note'] = 'Possible missing Break In before this punch.';
+                        } else {
+                            $log['actual_status'] = 'Clock In';
+                            $log['missing_punch'] = true;
+                            $log['missing_punch_note'] = 'Possible missing Break Out before this punch.';
+                        }
+                    }
+                    // If large gap after this punch, might indicate missing punch after
+                    else if ($anomalousNextGap && $i < $count - 2) {
+                        // Determine based on alternating pattern
+                        if ($i % 2 == 1) {
+                            $log['actual_status'] = 'Break In';
+                            $log['missing_punch'] = true;
+                            $log['missing_punch_note'] = 'Possible missing Break Out after this punch.';
+                        } else {
+                            $log['actual_status'] = 'Break Out';
+                            $log['missing_punch'] = true;
+                            $log['missing_punch_note'] = 'Possible missing Break In after this punch.';
+                        }
+                    }
+                    // Otherwise, use the alternating pattern as a fallback
+                    else {
+                        // Determine if this is likely part of a break
+                        // Short time gaps usually indicate breaks
+                        $isLikelyBreak = ($prevGapMinutes < 30 || $nextGapMinutes < 30);
+                        
+                        // Alternate between in/out status
+                        if ($i % 2 == 1) {
+                            // Odd positions after first (1, 3, 5...) are outs (either break or clock)
+                            $log['actual_status'] = $isLikelyBreak ? 'Break In' : 'Clock Out';
+                        } else {
+                            // Even positions before last (2, 4, 6...) are ins (either break or clock)
+                            $log['actual_status'] = $isLikelyBreak ? 'Break Out' : 'Clock In';
+                        }
+                        
+                        if ($i == $count - 2 && $count % 2 == 0) {
+                            $log['missing_punch_note'] = 'Odd number of punches, pattern unclear. Check manually.';
+                        }
+                    }
+                }
+            }
+            else {
+                // Even number of punches > 4, likely correct sequence
+                // First punch is always Clock In
+                if ($i == 0) {
+                    $log['actual_status'] = 'Clock In';
+                } 
+                // Last punch is always Clock Out
+                else if ($i == $count - 1) {
+                    $log['actual_status'] = 'Clock Out';
+                }
+                // For punches in between, try to detect patterns
+                else {
+                    $currentTime = strtotime($log['timestamp']);
+                    
+                    // Check previous gap
+                    $prevTime = strtotime($logs[$i-1]['timestamp']);
+                    $prevGapMinutes = ($currentTime - $prevTime) / 60;
+                    
+                    // Check next gap if not the last punch
+                    $nextGapMinutes = 0;
+                    if ($i < $count - 1) {
+                        $nextTime = strtotime($logs[$i+1]['timestamp']);
+                        $nextGapMinutes = ($nextTime - $currentTime) / 60;
+                    }
+                    
+                    // Determine if this is likely part of a break
+                    // Short time gaps usually indicate breaks
+                    $isLikelyBreak = ($prevGapMinutes < 30 || $nextGapMinutes < 30);
+                    
+                    // Alternate between in/out status
+                    if ($i % 2 == 1) {
+                        // Odd positions after first (1, 3, 5...) are outs (either break or clock)
+                        $log['actual_status'] = $isLikelyBreak ? 'Break In' : 'Clock Out';
+                    } else {
+                        // Even positions before last (2, 4, 6...) are ins (either break or clock)
+                        $log['actual_status'] = $isLikelyBreak ? 'Break Out' : 'Clock In';
+                    }
+                }
+            }
+            
+            $processedLogs[] = $log;
+        }
+        
+        return $processedLogs;
+    }
+/**
+ * Process logs with time-based logic
+ * 
+ * @param array $logs The attendance logs from the device
+ * @return array Processed logs with accurate status
+ */
+private function processLogsWithTimeBasedLogic($logs)
+{
+    // Group logs by employee ID
+    $employeeLogs = [];
+    foreach ($logs as $log) {
+        $employeeId = $log['id'];
+        if (!isset($employeeLogs[$employeeId])) {
+            $employeeLogs[$employeeId] = [];
+        }
+        $employeeLogs[$employeeId][] = $log;
+    }
+    
+    // Process logs with time-based logic
+    $processedLogs = [];
+    foreach ($employeeLogs as $employeeId => $empLogs) {
+        // Sort logs by timestamp
+        usort($empLogs, function($a, $b) {
+            return strtotime($a['timestamp']) - strtotime($b['timestamp']);
+        });
+        
+        // First log of the day is always "Clock In"
+        $currentDate = '';
+        $dailyPunchCount = 0;
+        
+        foreach ($empLogs as $index => $log) {
+            $logDate = date('Y-m-d', strtotime($log['timestamp']));
+            
+            // Keep original values
+            $log['original_state'] = $log['state'] ?? null;
+            $log['device_status'] = isset($log['state']) ? 
+                ($log['state'] == 1 ? 'Device reported: Clock Out' : 'Device reported: Clock In') : 
+                'Unknown';
+            
+            // If this is the first punch of the day
+            if ($logDate !== $currentDate) {
+                $log['actual_status'] = 'Clock In';
+                $currentDate = $logDate;
+                $dailyPunchCount = 1;
+            } else {
+                // Increment punch count for this day
+                $dailyPunchCount++;
+                
+                // Determine status based on punch sequence
+                switch ($dailyPunchCount % 4) {
+                    case 1:
+                        $log['actual_status'] = 'Clock In';
+                        break;
+                    case 2:
+                        $log['actual_status'] = 'Clock Out';
+                        break;  
+                    case 3:
+                        $log['actual_status'] = 'Break In';
+                        break;
+                    case 0: // When dailyPunchCount is divisible by 4
+                        $log['actual_status'] = 'Break Out';
+                        break;
+                }
+            }
+            
+            $processedLogs[] = $log;
+        }
+    }
+    
+    return $processedLogs;
+}
+
+/**
+ * Extract log details from the device log
+ * Make sure this method can extract all necessary fields
+ */
+private function extractLogDetails($log)
     {
         if (is_array($log)) {
             $userId = $log['id'] ?? $log['uid'] ?? $log['user_id'] ?? null;
             $timestamp = $log['timestamp'] ?? $log['time'] ?? null;
             $state = $log['state'] ?? $log['status'] ?? null;
-    
+            $actualStatus = $log['actual_status'] ?? null;
+            
             return [
                 'state' => $state,
                 'user_id' => $userId,
                 'timestamp' => $timestamp,
+                'actual_status' => $actualStatus,
             ];
         }
-    
+        
         Log::warning('Unexpected log format', ['log' => $log]);
         return [
             'state' => null,
             'user_id' => null,
             'timestamp' => null,
+            'actual_status' => null,
         ];
     }
     
@@ -539,6 +1267,7 @@ public function testConnection(Request $request)
         return !is_null($log['user_id']) && !is_null($log['timestamp']);
     }
     
+
     /**
      * Import logs from a CSV file
      */
@@ -1256,6 +1985,336 @@ public function testConnection(Request $request)
             ], 500);
         }
     }
+   /**
+ * Scan the network for ZKTeco devices.
+ *
+ * @param  \Illuminate\Http\Request  $request
+ * @return \Illuminate\Http\Response
+ */
+public function scanNetwork(Request $request)
+{
+    // Validate input
+    $validated = $request->validate([
+        'subnet' => 'required|string',
+        'port' => 'nullable|integer|min:1|max:65535',
+    ]);
+
+    $subnet = $validated['subnet'];
+    $port = $validated['port'] ?? 4370; // Default ZKTeco port
+    
+    // We'll scan a range of IP addresses in the subnet
+    $devices = [];
+    $startIp = 1;
+    $endIp = 254; // Standard range for class C networks
+    
+    // For faster scanning, we'll use multiple concurrent processes
+    $maxConcurrent = 10;
+    $timeout = 0.2; // 200ms timeout for each connection attempt
+    
+    for ($i = $startIp; $i <= $endIp; $i += $maxConcurrent) {
+        $processes = [];
+        
+        // Start multiple ping processes
+        for ($j = 0; $j < $maxConcurrent && ($i + $j) <= $endIp; $j++) {
+            $ip = $subnet . '.' . ($i + $j);
+            
+            // We'll use ping to quickly determine if the IP is active
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd = "ping -n 1 -w 200 $ip";
+            } else {
+                $cmd = "ping -c 1 -W 1 $ip";
+            }
+            
+            $descriptorspec = [
+                0 => ["pipe", "r"],  // stdin
+                1 => ["pipe", "w"],  // stdout
+                2 => ["pipe", "w"]   // stderr
+            ];
+            
+            $processes[$ip] = [
+                'process' => proc_open($cmd, $descriptorspec, $pipes),
+                'pipes' => $pipes
+            ];
+        }
+        
+        // Check which IPs are active
+        $activeIps = [];
+        foreach ($processes as $ip => $data) {
+            $output = stream_get_contents($data['pipes'][1]);
+            fclose($data['pipes'][0]);
+            fclose($data['pipes'][1]);
+            fclose($data['pipes'][2]);
+            proc_close($data['process']);
+            
+            // Check if ping was successful
+            if (PHP_OS_FAMILY === 'Windows') {
+                $active = strpos($output, 'Reply from') !== false;
+            } else {
+                $active = strpos($output, ' 0% packet loss') !== false;
+            }
+            
+            if ($active) {
+                $activeIps[] = $ip;
+            }
+        }
+        
+        // Now check which active IPs have the ZKTeco port open
+        foreach ($activeIps as $ip) {
+            $fp = @fsockopen($ip, $port, $errno, $errstr, $timeout);
+            if ($fp) {
+                // We found a device that has the ZKTeco port open
+                fclose($fp);
+                
+                // Now try to connect to the device using ZKTeco protocol to get more information
+                try {
+                    // Create a ZKTeco service instance
+                    $zkService = new ZKTecoService($ip, $port);
+                    $connected = $zkService->connect();
+                    
+                    if ($connected) {
+                        // Try to get device information
+                        try {
+                            $deviceInfo = $zkService->getDeviceInfo();
+                            
+                            // Add the device with detailed information
+                            $devices[] = [
+                                'ip_address' => $ip,
+                                'port' => $port,
+                                'name' => $deviceInfo['device_name'] !== 'N/A' 
+                                    ? $deviceInfo['device_name'] 
+                                    : "ZKTeco Device ($ip)",
+                                'model' => $deviceInfo['platform'] !== 'N/A' 
+                                    ? $deviceInfo['platform'] 
+                                    : "ZKTeco",
+                                'serial_number' => $deviceInfo['serial_number'] !== 'N/A' 
+                                    ? $deviceInfo['serial_number'] 
+                                    : "ZK" . substr(md5($ip), 0, 8),
+                                'firmware' => $deviceInfo['firmware_version'] ?? 'Unknown',
+                                'mac_address' => $deviceInfo['mac_address'] ?? 'Unknown'
+                            ];
+                            
+                            Log::info("Found ZKTeco device with details", [
+                                'ip' => $ip, 
+                                'name' => $deviceInfo['device_name'],
+                                'serial' => $deviceInfo['serial_number']
+                            ]);
+                        } catch (\Exception $e) {
+                            // If we get an error retrieving device info, still add the device
+                            // with default information
+                            Log::warning("Error getting device info: " . $e->getMessage(), ['ip' => $ip]);
+                            
+                            $devices[] = [
+                                'ip_address' => $ip,
+                                'port' => $port,
+                                'name' => "ZKTeco Device ($ip)",
+                                'model' => "ZKTeco",
+                                'serial_number' => "ZK" . substr(md5($ip), 0, 8)
+                            ];
+                        }
+                        
+                        // Disconnect from the device
+                        $zkService->disconnect();
+                    } else {
+                        // If we couldn't connect with ZKTeco protocol but port is open,
+                        // still list it as a potential device
+                        $devices[] = [
+                            'ip_address' => $ip,
+                            'port' => $port,
+                            'name' => "ZKTeco Device ($ip)",
+                            'model' => "ZKTeco",
+                            'serial_number' => "ZK" . substr(md5($ip), 0, 8)
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Error connecting to potential ZKTeco device: " . $e->getMessage(), ['ip' => $ip]);
+                    
+                    // Still add as potential device even if connection failed
+                    $devices[] = [
+                        'ip_address' => $ip,
+                        'port' => $port,
+                        'name' => "ZKTeco Device ($ip)",
+                        'model' => "ZKTeco",
+                        'serial_number' => "ZK" . substr(md5($ip), 0, 8)
+                    ];
+                }
+            }
+        }
+    }
+    
+    Log::info("Network scan complete. Found " . count($devices) . " potential ZKTeco devices.");
+    
+    return response()->json([
+        'success' => true,
+        'devices' => $devices
+    ]);
+}
+protected function getZKTecoBasicInfo($ip, $port)
+{
+    // Default info in case we can't connect or determine details
+    $info = [
+        'name' => 'ZKTeco Device',
+        'model' => 'Unknown',
+        'serial' => ''
+    ];
+    
+    try {
+        // This is a very simplified approach to query a ZKTeco device
+        // In a production environment, you'd implement the full protocol
+        $socket = @fsockopen($ip, $port, $errno, $errstr, 2);
+        
+        if ($socket) {
+            // Try to get device info (simplified)
+            // The actual protocol would be more complex
+            
+            // Example command (this is simplified and might not work with all devices)
+            $command = chr(0x5A) . chr(0xA5) . chr(0x00) . chr(0x00) . chr(0x00) . chr(0x00) . chr(0x00) . chr(0x00);
+            
+            fwrite($socket, $command);
+            
+            // Wait for a response
+            stream_set_timeout($socket, 2);
+            $response = fread($socket, 1024);
+            
+            // In a real implementation, you would parse the response based on the ZKTeco protocol
+            // For now, we'll just log it for debugging
+            Log::debug("ZKTeco response from $ip: " . bin2hex($response));
+            
+            // For demonstration, if we get any response, assume it's a valid device
+            if (strlen($response) > 0) {
+                $info = [
+                    'name' => 'ZKTeco Device ' . substr(md5($ip), 0, 4),
+                    'model' => 'ZKTeco',
+                    'serial' => 'SN' . substr(md5($ip . $response), 0, 8)
+                ];
+            }
+            
+            fclose($socket);
+        }
+    } catch (\Exception $e) {
+        Log::warning("Error getting ZKTeco device info for $ip: " . $e->getMessage());
+    }
+    
+    return $info;
+}
+/**
+ * Get scan progress updates via Server-Sent Events.
+ *
+ * @param  string  $scanId
+ * @return \Symfony\Component\HttpFoundation\StreamedResponse
+ */
+public function scanProgress($scanId)
+{
+    return response()->stream(function () use ($scanId) {
+        // Set headers for SSE
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        
+        $maxWaitTime = 60; // Maximum time to wait in seconds
+        $startTime = time();
+        
+        while (true) {
+            // Check if we've exceeded the maximum wait time
+            if (time() - $startTime > $maxWaitTime) {
+                echo "data: " . json_encode(['complete' => true, 'timeout' => true]) . "\n\n";
+                flush();
+                break;
+            }
+            
+            // Get scan info from cache
+            $scanInfo = Cache::get("scan:$scanId:info");
+            
+            if (!$scanInfo) {
+                echo "data: " . json_encode(['error' => 'Scan not found']) . "\n\n";
+                flush();
+                break;
+            }
+            
+            // Send progress update
+            echo "data: " . json_encode([
+                'progress' => $scanInfo['progress'],
+                'devices' => $scanInfo['devices'],
+                'complete' => $scanInfo['status'] === 'completed',
+            ]) . "\n\n";
+            flush();
+            
+            // If scan is complete, exit the loop
+            if ($scanInfo['status'] === 'completed') {
+                break;
+            }
+            
+            // Sleep for a short time before checking again
+            usleep(500000); // 500ms
+        }
+    }, 200, [
+        'Cache-Control' => 'no-cache',
+        'Content-Type' => 'text/event-stream',
+        'Connection' => 'keep-alive',
+    ]);
+}
+
+/**
+ * Perform the actual network scan for ZKTeco devices.
+ * 
+ * @param string $scanId
+ * @param string $subnet
+ * @param int $port
+ * @return void
+ */
+protected function performNetworkScan($scanId, $subnet, $port)
+{
+    // For demonstration purposes, we'll simulate finding devices
+    // In a real implementation, you would scan the network for actual devices
+    
+    $foundDevices = [];
+    $totalIps = 254; // Typical Class C network range
+    
+    for ($i = 1; $i <= $totalIps; $i++) {
+        // Update progress (every 10 IPs)
+        if ($i % 10 === 0 || $i === $totalIps) {
+            $progress = min(100, round($i / $totalIps * 100));
+            
+            $scanInfo = Cache::get("scan:$scanId:info");
+            $scanInfo['progress'] = $progress;
+            Cache::put("scan:$scanId:info", $scanInfo, now()->addMinutes(5));
+        }
+        
+        // Simulate finding a device with ~5% probability
+        if (rand(1, 100) <= 5) {
+            $ip = $subnet . '.' . $i;
+            
+            // Simulate a found device
+            $device = [
+                'ip_address' => $ip,
+                'port' => $port,
+                'name' => 'ZKTeco Device',
+                'model' => 'ZK-' . rand(1000, 9999),
+                'serial_number' => 'SN' . substr(md5($ip), 0, 8),
+            ];
+            
+            $foundDevices[] = $device;
+            
+            // Update devices in cache
+            $scanInfo = Cache::get("scan:$scanId:info");
+            $scanInfo['devices'] = $foundDevices;
+            Cache::put("scan:$scanId:info", $scanInfo, now()->addMinutes(5));
+            
+            // Send device found via SSE
+            $scanInfo = Cache::get("scan:$scanId:info");
+            $scanInfo['device'] = $device;
+            Cache::put("scan:$scanId:info", $scanInfo, now()->addMinutes(5));
+        }
+        
+        // Add a small delay to simulate network scanning
+        usleep(50000); // 50ms
+    }
+    
+    // Mark scan as completed
+    $scanInfo = Cache::get("scan:$scanId:info");
+    $scanInfo['status'] = 'completed';
+    $scanInfo['progress'] = 100;
+    Cache::put("scan:$scanId:info", $scanInfo, now()->addMinutes(5));
+}
     
     /**
      * Generate recommendations based on diagnostic results.
