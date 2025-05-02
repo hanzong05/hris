@@ -339,6 +339,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
 });
+
 // Management Routes
 Route::middleware(['role:superadmin,hrd'])->prefix('manage')->group(function () {
     Route::get('/departments', function () {
@@ -350,13 +351,31 @@ Route::middleware(['role:superadmin,hrd'])->prefix('manage')->group(function () 
     })->name('manage.departments');
     
     Route::get('/lines-sections', function () {
-        return Inertia::render('Manage/LineAndSection');
+        return Inertia::render('Manage/LineAndSection', [
+            'auth' => [
+                'user' => Auth::user()
+            ]
+        ]);
     })->name('manage.lines-sections');
     
-    Route::get('/roles-access', function () {
-        return Inertia::render('Manage/RolesAndAccess');
-    })->name('manage.roles-access');
+    Route::get('/line-section', function () {
+        return Inertia::render('Manage/LineAndSection', [
+            'auth' => [
+                'user' => Auth::user()
+            ]
+        ]);
+    })->name('manage.line-section');
+    
+    // Add the new route for roles access
+    Route::get('/roles', function () {
+        return Inertia::render('Manage/RolesAndAccess', [
+            'auth' => [
+                'user' => Auth::user()
+            ]
+        ]);
+    })->name('manage.roles');
 });
+
 Route::middleware(['auth:sanctum'])->group(function () {
     // Department routes
     Route::get('/departments', [DepartmentController::class, 'index']);

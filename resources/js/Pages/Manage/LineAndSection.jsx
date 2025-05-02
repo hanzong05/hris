@@ -4,15 +4,26 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Sidebar from '@/Components/Sidebar';
 import { Button } from '@/components/ui/button';
 import { 
-    Plus, Edit, Trash2, Save, X, Eye, ToggleLeft, ToggleRight,
-    Briefcase, CheckCircle, XCircle, AlertTriangle, Check
+    Search, 
+    Plus,
+    Edit,
+    Trash2,
+    Save,
+    X,
+    Building,
+    Layers,
+    Eye,
+    ToggleLeft,
+    ToggleRight,
+    CheckCircle,
+    XCircle,
+    AlertTriangle,
+    Check
 } from 'lucide-react';
 import { debounce } from 'lodash';
 import axios from 'axios';
 import Modal from '@/Components/Modal';
 import ConfirmModal from '@/Components/ConfirmModal';
-// Import virtualization library
-import { useVirtualizer } from '@tanstack/react-virtual';
 
 // Toast Component
 const Toast = ({ message, type, onClose }) => {
@@ -46,15 +57,36 @@ const Toast = ({ message, type, onClose }) => {
     );
 };
 
-// Department Modal Component
-const DepartmentModal = ({ 
+// Status Badge Component
+const StatusBadge = ({ isActive }) => {
+    if (isActive) {
+        return (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <span className="mr-1.5 h-2 w-2 bg-green-400 rounded-full"></span>
+                Active
+            </span>
+        );
+    } else {
+        return (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                <span className="mr-1.5 h-2 w-2 bg-yellow-400 rounded-full"></span>
+                Inactive
+            </span>
+        );
+    }
+};
+
+// Line Modal Component
+const LineModal = ({ 
     isOpen, 
     onClose, 
     title, 
-    department, 
+    line, 
+    departments,
     onChange, 
     onSubmit, 
-    mode = 'create' 
+    mode = 'create',
+    errorMessages = {}
 }) => {
     const isViewMode = mode === 'view';
     
@@ -74,40 +106,47 @@ const DepartmentModal = ({
                 <form onSubmit={onSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Department Code</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Line Code</label>
                             <input
                                 type="text"
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''}`}
-                                value={department.code || ''}
-                                onChange={(e) => onChange({...department, code: e.target.value})}
-                                placeholder="e.g. HR, FIN, IT"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.code ? 'border-red-500' : ''}`}
+                                value={line.code || ''}
+                                onChange={(e) => onChange({...line, code: e.target.value})}
+                                placeholder="e.g. L001, L002"
                                 required
                                 disabled={isViewMode}
                             />
+                            {errorMessages.code && <p className="mt-1 text-sm text-red-600">{errorMessages.code}</p>}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Department Name</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Line Name</label>
                             <input
                                 type="text"
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''}`}
-                                value={department.name || ''}
-                                onChange={(e) => onChange({...department, name: e.target.value})}
-                                placeholder="e.g. Human Resources"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.name ? 'border-red-500' : ''}`}
+                                value={line.name || ''}
+                                onChange={(e) => onChange({...line, name: e.target.value})}
+                                placeholder="e.g. Production Line 1"
                                 required
                                 disabled={isViewMode}
                             />
+                            {errorMessages.name && <p className="mt-1 text-sm text-red-600">{errorMessages.name}</p>}
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                        <textarea
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''}`}
-                            value={department.description || ''}
-                            onChange={(e) => onChange({...department, description: e.target.value})}
-                            placeholder="Brief description of the department's function"
-                            rows="3"
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                        <select
+                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.department_id ? 'border-red-500' : ''}`}
+                            value={line.department_id || ''}
+                            onChange={(e) => onChange({...line, department_id: e.target.value})}
+                            required
                             disabled={isViewMode}
-                        />
+                        >
+                            <option value="">Select Department</option>
+                            {departments.filter(dept => dept.is_active).map(dept => (
+                                <option key={dept.id} value={dept.id}>{dept.name}</option>
+                            ))}
+                        </select>
+                        {errorMessages.department_id && <p className="mt-1 text-sm text-red-600">{errorMessages.department_id}</p>}
                     </div>
 
                     {!isViewMode && (
@@ -118,8 +157,8 @@ const DepartmentModal = ({
                                     type="checkbox"
                                     id="active-status"
                                     className="rounded text-blue-600 focus:ring-blue-500"
-                                    checked={department.is_active}
-                                    onChange={(e) => onChange({...department, is_active: e.target.checked})}
+                                    checked={line.is_active}
+                                    onChange={(e) => onChange({...line, is_active: e.target.checked})}
                                     disabled={isViewMode}
                                 />
                                 <label htmlFor="active-status" className="text-sm text-gray-700">Active</label>
@@ -143,7 +182,7 @@ const DepartmentModal = ({
                                 className="bg-blue-600 text-white hover:bg-blue-700"
                             >
                                 <Save className="w-4 h-4 mr-2" />
-                                {mode === 'create' ? 'Save Department' : 'Update Department'}
+                                {mode === 'create' ? 'Save Line' : 'Update Line'}
                             </Button>
                         )}
                     </div>
@@ -153,247 +192,152 @@ const DepartmentModal = ({
     );
 };
 
-// Status Badge Component
-const StatusBadge = ({ isActive }) => {
-    if (isActive) {
-        return (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                <span className="mr-1.5 h-2 w-2 bg-green-400 rounded-full"></span>
-                Active
-            </span>
-        );
-    } else {
-        return (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                <span className="mr-1.5 h-2 w-2 bg-yellow-400 rounded-full"></span>
-                Inactive
-            </span>
-        );
-    }
-};
-
-// Improved VirtualizedDepartmentsTable Component matching the desired layout
-const VirtualizedDepartmentsTable = ({ 
-    loading, 
-    filteredDepartments, 
-    handleViewClick, 
-    handleEditClick, 
-    handleToggleActive, 
-    handleDelete 
+// Section Modal Component
+const SectionModal = ({ 
+    isOpen, 
+    onClose, 
+    title, 
+    section, 
+    lines,
+    onChange, 
+    onSubmit, 
+    mode = 'create',
+    errorMessages = {}
 }) => {
-    // Table headers (for reference and organization)
-    const tableHeaders = [
-        { id: 'actions', title: 'ACTIONS', width: '150px' },
-        { id: 'status', title: 'STATUS', width: '100px' },
-        { id: 'code', title: 'CODE', width: '120px' },
-        { id: 'name', title: 'DEPARTMENT NAME', width: '200px' },
-        { id: 'description', title: 'DESCRIPTION', width: 'auto' }
-    ];
-    
-    // If loading or no departments, show message
-    if (loading) {
-        return (
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-                <div className="border-b border-gray-200">
-                    <div className="flex bg-gray-50 text-gray-500">
-                        {tableHeaders.map(header => (
-                            <div 
-                                key={header.id}
-                                className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider"
-                                style={{ width: header.width, flexShrink: header.id === 'description' ? 1 : 0, flexGrow: header.id === 'description' ? 1 : 0 }}
-                            >
-                                {header.title}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div className="py-4 text-center text-gray-500">
-                    Loading departments...
-                </div>
-            </div>
-        );
-    }
-    
-    if (!loading && filteredDepartments.length === 0) {
-        return (
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-                <div className="border-b border-gray-200">
-                    <div className="flex bg-gray-50 text-gray-500">
-                        {tableHeaders.map(header => (
-                            <div 
-                                key={header.id}
-                                className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider"
-                                style={{ width: header.width, flexShrink: header.id === 'description' ? 1 : 0, flexGrow: header.id === 'description' ? 1 : 0 }}
-                            >
-                                {header.title}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div className="py-4 text-center text-gray-500">
-                    No departments found. Add a new department to get started.
-                </div>
-            </div>
-        );
-    }
-
-    // Reference for the scrollable container
-    const parentRef = React.useRef(null);
-    
-    // Define row height
-    const rowHeight = 64;
-    
-    // Virtual rows setup
-    const rowVirtualizer = useVirtualizer({
-        count: filteredDepartments.length,
-        getScrollElement: () => parentRef.current,
-        estimateSize: () => rowHeight,
-        overscan: 5,
-    });
+    const isViewMode = mode === 'view';
     
     return (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-            {/* Fixed header */}
-            <div className="border-b border-gray-200">
-                <div className="flex bg-gray-50 text-gray-500">
-                    {tableHeaders.map(header => (
-                        <div 
-                            key={header.id}
-                            className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider flex-1"
-                        >
-                            {header.title}
+        <Modal show={isOpen} onClose={onClose} maxWidth="md">
+            <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-semibold">{title}</h2>
+                    <button 
+                        onClick={() => onClose(false)}
+                        className="text-gray-400 hover:text-gray-500"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                
+                <form onSubmit={onSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Section Code</label>
+                            <input
+                                type="text"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.code ? 'border-red-500' : ''}`}
+                                value={section.code || ''}
+                                onChange={(e) => onChange({...section, code: e.target.value})}
+                                placeholder="e.g. S001, S002"
+                                required
+                                disabled={isViewMode}
+                            />
+                            {errorMessages.code && <p className="mt-1 text-sm text-red-600">{errorMessages.code}</p>}
                         </div>
-                    ))}
-                </div>
-            </div>
-            
-            {/* Scrollable container for virtualized body */}
-            <div 
-                ref={parentRef}
-                className="overflow-auto"
-                style={{ height: '60vh' }}
-            >
-                <div
-                    style={{
-                        height: `${rowVirtualizer.getTotalSize()}px`,
-                        width: '100%',
-                        position: 'relative'
-                    }}
-                >
-                    {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                        const department = filteredDepartments[virtualRow.index];
-                        const rowColor = !department.is_active ? 'bg-yellow-50' : '';
-                        
-                        return (
-                            <div
-                                key={virtualRow.key}
-                                data-index={virtualRow.index}
-                                className={`absolute top-0 left-0 w-full border-b border-gray-200 ${rowColor} hover:bg-gray-50`}
-                                style={{
-                                    height: `${rowHeight}px`,
-                                    transform: `translateY(${virtualRow.start}px)`,
-                                }}
-                            >
-                                <div className="flex h-full items-center">
-                                    {/* Actions cell */}
-                                    <div className="px-6 flex-1">
-                                        <div className="flex space-x-3">
-                                            <button
-                                                onClick={() => handleViewClick(department)}
-                                                className="text-gray-400 hover:text-gray-500"
-                                                title="View"
-                                            >
-                                                <Eye className="h-5 w-5" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleEditClick(department)}
-                                                className="text-gray-400 hover:text-gray-500"
-                                                title="Edit"
-                                            >
-                                                <Edit className="h-5 w-5" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleToggleActive(department)}
-                                                className="text-gray-400 hover:text-gray-500"
-                                                title={department.is_active ? "Deactivate" : "Activate"}
-                                            >
-                                                {department.is_active ? (
-                                                    <ToggleRight className="h-5 w-5 text-green-500" />
-                                                ) : (
-                                                    <ToggleLeft className="h-5 w-5 text-gray-400" />
-                                                )}
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(department)}
-                                                className="text-gray-400 hover:text-red-500"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="h-5 w-5" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Status cell */}
-                                    <div className="px-6 flex-1">
-                                        {department.is_active ? (
-                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                <span className="mr-1.5 h-2 w-2 bg-green-400 rounded-full"></span>
-                                                Active
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                                <span className="mr-1.5 h-2 w-2 bg-yellow-400 rounded-full"></span>
-                                                Inactive
-                                            </span>
-                                        )}
-                                    </div>
-                                    
-                                    {/* Code cell */}
-                                    <div className="px-6 flex-1 text-sm font-medium text-gray-900">
-                                        {department.code}
-                                    </div>
-                                    
-                                    {/* Name cell */}
-                                    <div className="px-6 flex-1 text-sm text-gray-900">
-                                        {department.name}
-                                    </div>
-                                    
-                                    {/* Description cell */}
-                                    <div className="px-6 flex-1 text-sm text-gray-500 overflow-hidden">
-                                        {department.description || 'No description provided'}
-                                    </div>
-                                </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Section Name</label>
+                            <input
+                                type="text"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.name ? 'border-red-500' : ''}`}
+                                value={section.name || ''}
+                                onChange={(e) => onChange({...section, name: e.target.value})}
+                                placeholder="e.g. Assembly Section"
+                                required
+                                disabled={isViewMode}
+                            />
+                            {errorMessages.name && <p className="mt-1 text-sm text-red-600">{errorMessages.name}</p>}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Line</label>
+                        <select
+                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.line_id ? 'border-red-500' : ''}`}
+                            value={section.line_id || ''}
+                            onChange={(e) => onChange({...section, line_id: e.target.value})}
+                            required
+                            disabled={isViewMode}
+                        >
+                            <option value="">Select Line</option>
+                            {lines.filter(line => line.is_active).map(line => (
+                                <option key={line.id} value={line.id}>{line.name}</option>
+                            ))}
+                        </select>
+                        {errorMessages.line_id && <p className="mt-1 text-sm text-red-600">{errorMessages.line_id}</p>}
+                    </div>
+
+                    {!isViewMode && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="active-status"
+                                    className="rounded text-blue-600 focus:ring-blue-500"
+                                    checked={section.is_active}
+                                    onChange={(e) => onChange({...section, is_active: e.target.checked})}
+                                    disabled={isViewMode}
+                                />
+                                <label htmlFor="active-status" className="text-sm text-gray-700">Active</label>
                             </div>
-                        );
-                    })}
-                </div>
+                        </div>
+                    )}
+                    
+                    <div className="flex justify-end mt-6">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onClose(false)}
+                            className="mr-2"
+                        >
+                            {isViewMode ? 'Close' : 'Cancel'}
+                        </Button>
+                        
+                        {!isViewMode && (
+                            <Button
+                                type="submit"
+                                className="bg-blue-600 text-white hover:bg-blue-700"
+                            >
+                                <Save className="w-4 h-4 mr-2" />
+                                {mode === 'create' ? 'Save Section' : 'Update Section'}
+                            </Button>
+                        )}
+                    </div>
+                </form>
             </div>
-        </div>
+        </Modal>
     );
 };
 
-// Main Departments Component
-const Departments = () => {
-    // Make sure we safely access auth and user
-    const { auth } = usePage().props || {};
-    const user = auth?.user || {};
+// Main Lines and Sections Component
+const LinesAndSections = () => {
+    // Safely get user from page props
+    const { auth } = usePage().props;
+    const user = auth?.user || { name: 'User', email: '' };
     
+    const [activeTab, setActiveTab] = useState('lines');
+    const [lines, setLines] = useState([]);
+    const [sections, setSections] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filteredDepartments, setFilteredDepartments] = useState([]);
-    const [activeFilter, setActiveFilter] = useState('All Departments');
     
     // Toast state
     const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     
-    // Department state
-    const emptyDepartment = { name: '', code: '', description: '', is_active: true };
-    const [currentDepartment, setCurrentDepartment] = useState(emptyDepartment);
+    // Line and section states
+    const [currentLine, setCurrentLine] = useState({ name: '', code: '', department_id: '', is_active: true });
+    const [currentSection, setCurrentSection] = useState({ name: '', code: '', line_id: '', is_active: true });
     
     // Modal states
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [isCreateLineModalOpen, setIsCreateLineModalOpen] = useState(false);
+    const [isEditLineModalOpen, setIsEditLineModalOpen] = useState(false);
+    const [isViewLineModalOpen, setIsViewLineModalOpen] = useState(false);
+    const [isCreateSectionModalOpen, setIsCreateSectionModalOpen] = useState(false);
+    const [isEditSectionModalOpen, setIsEditSectionModalOpen] = useState(false);
+    const [isViewSectionModalOpen, setIsViewSectionModalOpen] = useState(false);
+    
+    // Error states for validation
+    const [lineErrors, setLineErrors] = useState({});
+    const [sectionErrors, setSectionErrors] = useState({});
     
     // Confirmation modal state
     const [confirmModal, setConfirmModal] = useState({
@@ -404,17 +348,29 @@ const Departments = () => {
         confirmVariant: 'destructive',
         onConfirm: () => {}
     });
+    
+    // Search and filter states
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeFilter, setActiveFilter] = useState('All');
+    const [filteredLines, setFilteredLines] = useState([]);
+    const [filteredSections, setFilteredSections] = useState([]);
 
-    // Load departments
-    const loadDepartments = useCallback(async () => {
+    // Load data function
+    const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            // Using the correct non-API route as defined in web.php
-            const response = await axios.get('/departments');
-            setDepartments(response.data.data || []);
+            const [linesResponse, sectionsResponse, departmentsResponse] = await Promise.all([
+                axios.get('/lines'),
+                axios.get('/sections'),
+                axios.get('/departments')
+            ]);
+            
+            setLines(linesResponse.data.data || []);
+            setSections(sectionsResponse.data.data || []);
+            setDepartments(departmentsResponse.data.data || []);
         } catch (error) {
-            console.error('Error loading departments:', error);
-            showToast('Error loading departments: ' + (error.response?.data?.message || error.message), 'error');
+            console.error('Error loading data:', error);
+            showToast('Error loading data: ' + (error.response?.data?.message || error.message), 'error');
         } finally {
             setLoading(false);
         }
@@ -422,171 +378,407 @@ const Departments = () => {
 
     // Load data on component mount
     useEffect(() => {
-        loadDepartments();
-    }, [loadDepartments]);
+        loadData();
+    }, [loadData]);
 
     // Calculate statistics
-    const totalDepartments = departments.length;
-    const activeDepartments = departments.filter(dept => dept.is_active).length;
-    const inactiveDepartments = departments.filter(dept => !dept.is_active).length;
+    const totalLines = lines.length;
+    const activeLines = lines.filter(line => line.is_active).length;
+    const inactiveLines = lines.filter(line => !line.is_active).length;
     
-    // State for search term
-    const [searchTerm, setSearchTerm] = useState('');
+    const totalSections = sections.length;
+    const activeSections = sections.filter(section => section.is_active).length;
+    const inactiveSections = sections.filter(section => !section.is_active).length;
     
-    // Filter departments based on status filter and search term
+    // Filter lines based on status filter and search term
     useEffect(() => {
-        let results = [...departments];
+        let results = [...lines];
         
         // Apply status filter
         if (activeFilter === 'Active') {
-            results = results.filter(department => department.is_active);
+            results = results.filter(line => line.is_active);
         } else if (activeFilter === 'Inactive') {
-            results = results.filter(department => !department.is_active);
+            results = results.filter(line => !line.is_active);
         }
         
-        // Apply search filter if search term exists
+        // Apply search filter
         if (searchTerm.trim() !== '') {
             const lowercasedSearchTerm = searchTerm.toLowerCase();
-            results = results.filter(department => 
-                department.name.toLowerCase().includes(lowercasedSearchTerm) || 
-                department.code.toLowerCase().includes(lowercasedSearchTerm) ||
-                (department.description && department.description.toLowerCase().includes(lowercasedSearchTerm))
+            results = results.filter(line => 
+                line.name.toLowerCase().includes(lowercasedSearchTerm) || 
+                line.code.toLowerCase().includes(lowercasedSearchTerm)
             );
         }
         
-        setFilteredDepartments(results);
-    }, [departments, activeFilter, searchTerm]);
+        // Add department name to each line
+        results = results.map(line => {
+            const department = departments.find(dept => dept.id === line.department_id);
+            return {
+                ...line,
+                department: department || null
+            };
+        });
+        
+        setFilteredLines(results);
+    }, [lines, departments, activeFilter, searchTerm]);
+
+    // Filter sections based on status filter and search term
+    useEffect(() => {
+        let results = [...sections];
+        
+        // Apply status filter
+        if (activeFilter === 'Active') {
+            results = results.filter(section => section.is_active);
+        } else if (activeFilter === 'Inactive') {
+            results = results.filter(section => !section.is_active);
+        }
+        
+        // Apply search filter
+        if (searchTerm.trim() !== '') {
+            const lowercasedSearchTerm = searchTerm.toLowerCase();
+            results = results.filter(section => 
+                section.name.toLowerCase().includes(lowercasedSearchTerm) || 
+                section.code.toLowerCase().includes(lowercasedSearchTerm)
+            );
+        }
+        
+        // Add line name to each section
+        results = results.map(section => {
+            const line = lines.find(line => line.id === section.line_id);
+            return {
+                ...section,
+                line: line || null
+            };
+        });
+        
+        setFilteredSections(results);
+    }, [sections, lines, activeFilter, searchTerm]);
 
     // Show toast notification
     const showToast = (message, type = 'success') => {
         setToast({ visible: true, message, type });
     };
 
-    // Close toast notification
-    const closeToast = () => {
-        setToast({ ...toast, visible: false });
+    // Line handlers
+    const handleCreateLineClick = () => {
+        setCurrentLine({ name: '', code: '', department_id: '', is_active: true });
+        setLineErrors({});
+        setIsCreateLineModalOpen(true);
     };
 
-    // Open create modal
-    const handleCreateClick = () => {
-        setCurrentDepartment(emptyDepartment);
-        setIsCreateModalOpen(true);
+    const handleEditLineClick = (line) => {
+        setCurrentLine({...line});
+        setLineErrors({});
+        setIsEditLineModalOpen(true);
     };
 
-    // Open edit modal
-    const handleEditClick = (department) => {
-        setCurrentDepartment({...department});
-        setIsEditModalOpen(true);
+    const handleViewLineClick = (line) => {
+        setCurrentLine({...line});
+        setIsViewLineModalOpen(true);
     };
 
-    // Open view modal
-    const handleViewClick = (department) => {
-        setCurrentDepartment({...department});
-        setIsViewModalOpen(true);
-    };
-
-    // Handle creating new department
-    const handleCreateSubmit = async (e) => {
+    // Verify active department before line creation/update
+    const handleCreateLineSubmit = async (e) => {
         e.preventDefault();
+        setLineErrors({});
         
         // Validate
-        if (!currentDepartment.name || !currentDepartment.code) {
-            showToast('Department name and code are required', 'error');
+        if (!currentLine.name || !currentLine.code || !currentLine.department_id) {
+            const errors = {};
+            if (!currentLine.name) errors.name = 'Line name is required';
+            if (!currentLine.code) errors.code = 'Line code is required';
+            if (!currentLine.department_id) errors.department_id = 'Department is required';
+            
+            setLineErrors(errors);
+            return;
+        }
+        
+        // Verify that selected department is active
+        const selectedDepartment = departments.find(dept => dept.id === parseInt(currentLine.department_id));
+        if (!selectedDepartment || !selectedDepartment.is_active) {
+            setLineErrors({
+                department_id: 'Please select an active department'
+            });
             return;
         }
         
         try {
             // Using the correct non-API route
-            const response = await axios.post('/departments', currentDepartment);
+            const response = await axios.post('/lines', currentLine);
             
-            // Update departments list
-            await loadDepartments();
+            // Update lines list
+            await loadData();
             
             // Reset form and close modal
-            setCurrentDepartment(emptyDepartment);
-            setIsCreateModalOpen(false);
+            setCurrentLine({ name: '', code: '', department_id: '', is_active: true });
+            setIsCreateLineModalOpen(false);
             
-            showToast('Department created successfully');
+            showToast('Line created successfully');
         } catch (error) {
-            console.error('Error creating department:', error);
-            showToast(error.response?.data?.message || 'Error creating department', 'error');
+            console.error('Error creating line:', error);
+            
+            // Handle validation errors
+            if (error.response?.status === 422 && error.response?.data?.errors) {
+                setLineErrors(error.response.data.errors);
+            } else {
+                showToast(error.response?.data?.message || 'Error creating line', 'error');
+            }
         }
     };
 
-    // Handle updating department
-    const handleUpdateSubmit = async (e) => {
+    const handleUpdateLineSubmit = async (e) => {
         e.preventDefault();
+        setLineErrors({});
         
         // Validate
-        if (!currentDepartment.name || !currentDepartment.code) {
-            showToast('Department name and code are required', 'error');
+        if (!currentLine.name || !currentLine.code || !currentLine.department_id) {
+            const errors = {};
+            if (!currentLine.name) errors.name = 'Line name is required';
+            if (!currentLine.code) errors.code = 'Line code is required';
+            if (!currentLine.department_id) errors.department_id = 'Department is required';
+            
+            setLineErrors(errors);
+            return;
+        }
+        
+        // Verify that selected department is active
+        const selectedDepartment = departments.find(dept => dept.id === parseInt(currentLine.department_id));
+        if (!selectedDepartment || !selectedDepartment.is_active) {
+            setLineErrors({
+                department_id: 'Please select an active department'
+            });
             return;
         }
         
         try {
             // Using the correct non-API route
-            const response = await axios.put(`/departments/${currentDepartment.id}`, currentDepartment);
+            const response = await axios.put(`/lines/${currentLine.id}`, currentLine);
             
-            // Update departments list through refetch
-            await loadDepartments();
+            // Update lines list through refetch
+            await loadData();
             
             // Reset editing state and close modal
-            setCurrentDepartment(emptyDepartment);
-            setIsEditModalOpen(false);
+            setCurrentLine({ name: '', code: '', department_id: '', is_active: true });
+            setIsEditLineModalOpen(false);
             
-            showToast('Department updated successfully');
+            showToast('Line updated successfully');
         } catch (error) {
-            console.error('Error updating department:', error);
-            showToast(error.response?.data?.message || 'Error updating department', 'error');
+            console.error('Error updating line:', error);
+            
+            // Handle validation errors
+            if (error.response?.status === 422 && error.response?.data?.errors) {
+                setLineErrors(error.response.data.errors);
+            } else {
+                showToast(error.response?.data?.message || 'Error updating line', 'error');
+            }
         }
     };
 
-    // Handle deleting department
-    const handleDelete = (department) => {
+    const handleDeleteLine = (line) => {
         setConfirmModal({
             isOpen: true,
-            title: 'Delete Department',
-            message: `Are you sure you want to delete the department "${department.name}"? This action cannot be undone.`,
+            title: 'Delete Line',
+            message: `Are you sure you want to delete the line "${line.name}"? This action cannot be undone.`,
             confirmText: 'Delete',
             confirmVariant: 'destructive',
             onConfirm: async () => {
                 try {
                     // Using the correct non-API route
-                    await axios.delete(`/departments/${department.id}`);
+                    await axios.delete(`/lines/${line.id}`);
                     
-                    // Update departments list through refetch
-                    await loadDepartments();
+                    // Update lines list through refetch
+                    await loadData();
                     
                     setConfirmModal({ ...confirmModal, isOpen: false });
-                    showToast('Department deleted successfully');
+                    showToast('Line deleted successfully');
                 } catch (error) {
-                    console.error('Error deleting department:', error);
+                    console.error('Error deleting line:', error);
                     setConfirmModal({ ...confirmModal, isOpen: false });
-                    showToast(error.response?.data?.message || 'Error deleting department', 'error');
+                    showToast(error.response?.data?.message || 'Error deleting line', 'error');
                 }
             }
         });
     };
 
-    // Handle toggling active status
-    const handleToggleActive = async (department) => {
+    const handleToggleActiveLine = async (line) => {
         try {
             // Using the correct non-API route
-            const response = await axios.patch(`/departments/${department.id}/toggle-active`);
+            const response = await axios.patch(`/lines/${line.id}/toggle-active`);
             
-            // Update departments list through refetch
-            await loadDepartments();
+            // Update lines list through refetch
+            await loadData();
             
-            showToast('Department status updated successfully');
+            showToast('Line status updated successfully');
         } catch (error) {
-            console.error('Error toggling department status:', error);
-            showToast(error.response?.data?.message || 'Error updating department status', 'error');
+            console.error('Error toggling line status:', error);
+            showToast(error.response?.data?.message || 'Error updating line status', 'error');
         }
     };
 
+    // Section handlers
+    const handleCreateSectionClick = () => {
+        setCurrentSection({ name: '', code: '', line_id: '', is_active: true });
+        setSectionErrors({});
+        setIsCreateSectionModalOpen(true);
+    };
+
+    const handleEditSectionClick = (section) => {
+        setCurrentSection({...section});
+        setSectionErrors({});
+        setIsEditSectionModalOpen(true);
+    };
+
+    const handleViewSectionClick = (section) => {
+        setCurrentSection({...section});
+        setIsViewSectionModalOpen(true);
+    };
+
+    // Verify active line before section creation/update
+    const handleCreateSectionSubmit = async (e) => {
+        e.preventDefault();
+        setSectionErrors({});
+        
+        // Validate
+        if (!currentSection.name || !currentSection.code || !currentSection.line_id) {
+            const errors = {};
+            if (!currentSection.name) errors.name = 'Section name is required';
+            if (!currentSection.code) errors.code = 'Section code is required';
+            if (!currentSection.line_id) errors.line_id = 'Line is required';
+            
+            setSectionErrors(errors);
+            return;
+        }
+        
+        // Verify that selected line is active
+        const selectedLine = lines.find(line => line.id === parseInt(currentSection.line_id));
+        if (!selectedLine || !selectedLine.is_active) {
+            setSectionErrors({
+                line_id: 'Please select an active line'
+            });
+            return;
+        }
+        
+        try {
+            // Using the correct non-API route
+            const response = await axios.post('/sections', currentSection);
+            
+            // Update sections list
+            await loadData();
+            
+            // Reset form and close modal
+            setCurrentSection({ name: '', code: '', line_id: '', is_active: true });
+            setIsCreateSectionModalOpen(false);
+            
+            showToast('Section created successfully');
+        } catch (error) {
+            console.error('Error creating section:', error);
+            
+            // Handle validation errors
+            if (error.response?.status === 422 && error.response?.data?.errors) {
+                setSectionErrors(error.response.data.errors);
+            } else {
+                showToast(error.response?.data?.message || 'Error creating section', 'error');
+            }
+        }
+    };
+
+    const handleUpdateSectionSubmit = async (e) => {
+        e.preventDefault();
+        setSectionErrors({});
+        
+        // Validate
+        if (!currentSection.name || !currentSection.code || !currentSection.line_id) {
+            const errors = {};
+            if (!currentSection.name) errors.name = 'Section name is required';
+            if (!currentSection.code) errors.code = 'Section code is required';
+            if (!currentSection.line_id) errors.line_id = 'Line is required';
+            
+            setSectionErrors(errors);
+            return;
+        }
+        
+        // Verify that selected line is active
+        const selectedLine = lines.find(line => line.id === parseInt(currentSection.line_id));
+        if (!selectedLine || !selectedLine.is_active) {
+            setSectionErrors({
+                line_id: 'Please select an active line'
+            });
+            return;
+        }
+        
+        try {
+            // Using the correct non-API route
+            const response = await axios.put(`/sections/${currentSection.id}`, currentSection);
+            
+            // Update sections list through refetch
+            await loadData();
+            
+            // Reset editing state and close modal
+            setCurrentSection({ name: '', code: '', line_id: '', is_active: true });
+            setIsEditSectionModalOpen(false);
+            
+            showToast('Section updated successfully');
+        } catch (error) {
+            console.error('Error updating section:', error);
+            
+            // Handle validation errors
+            if (error.response?.status === 422 && error.response?.data?.errors) {
+                setSectionErrors(error.response.data.errors);
+            } else {
+                showToast(error.response?.data?.message || 'Error updating section', 'error');
+            }
+        }
+    };
+
+    const handleDeleteSection = (section) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete Section',
+            message: `Are you sure you want to delete the section "${section.name}"? This action cannot be undone.`,
+            confirmText: 'Delete',
+            confirmVariant: 'destructive',
+            onConfirm: async () => {
+                try {
+                    // Using the correct non-API route
+                    await axios.delete(`/sections/${section.id}`);
+                    
+                    // Update sections list through refetch
+                    await loadData();
+                    
+                    setConfirmModal({ ...confirmModal, isOpen: false });
+                    showToast('Section deleted successfully');
+                } catch (error) {
+                    console.error('Error deleting section:', error);
+                    setConfirmModal({ ...confirmModal, isOpen: false });
+                    showToast(error.response?.data?.message || 'Error deleting section', 'error');
+                }
+            }
+        });
+    };
+
+    const handleToggleActiveSection = async (section) => {
+        try {
+            // Using the correct non-API route
+            const response = await axios.patch(`/sections/${section.id}/toggle-active`);
+            
+            // Update sections list through refetch
+            await loadData();
+            
+            showToast('Section status updated successfully');
+        } catch (error) {
+            console.error('Error toggling section status:', error);
+            showToast(error.response?.data?.message || 'Error updating section status', 'error');
+        }
+    };
+
+    // Debounced search handler
+    const debouncedSearch = debounce((value) => {
+        setSearchTerm(value);
+    }, 300);
+
     return (
         <AuthenticatedLayout>
-            <Head title="Manage Departments" />
+            <Head title="Lines and Sections Management" />
             <div className="flex min-h-screen bg-gray-50/50">
                 <Sidebar />
                 <div className="flex-1 p-8">
@@ -596,7 +788,7 @@ const Departments = () => {
                             <Toast 
                                 message={toast.message}
                                 type={toast.type}
-                                onClose={closeToast}
+                                onClose={() => setToast({...toast, visible: false})}
                             />
                         )}
 
@@ -604,144 +796,480 @@ const Departments = () => {
                         <div className="flex items-center justify-between mb-8">
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                                    Department Management
+                                    {activeTab === 'lines' ? 'Line Management' : 'Section Management'}
                                 </h1>
                                 <p className="text-gray-600">
-                                    Create, edit, and organize company departments.
+                                    Create, edit, and organize {activeTab === 'lines' ? 'production lines' : 'production sections'}.
                                 </p>
                             </div>
-                            <div>
-                                <Button
-                                    onClick={handleCreateClick}
-                                    className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 flex items-center"
-                                >
-                                    <Plus className="w-5 h-5 mr-2" />
-                                    Add Department
-                                </Button>
-                            </div>
+                            <Button
+                                onClick={activeTab === 'lines' ? handleCreateLineClick : handleCreateSectionClick}
+                                className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 flex items-center"
+                            >
+                                <Plus className="w-5 h-5 mr-2" />
+                                Add {activeTab === 'lines' ? 'Line' : 'Section'}
+                            </Button>
                         </div>
 
-                        {/* Stats Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                            <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500 font-medium">Total Departments</p>
-                                    <p className="text-3xl font-bold">{totalDepartments}</p>
-                                </div>
-                                <div className="rounded-full p-3 bg-indigo-100">
-                                    <Briefcase className="h-6 w-6 text-indigo-600" />
-                                </div>
-                            </div>
-                            
-                            <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500 font-medium">Active Departments</p>
-                                    <p className="text-3xl font-bold">{activeDepartments}</p>
-                                </div>
-                                <div className="rounded-full p-3 bg-green-100">
-                                    <CheckCircle className="h-6 w-6 text-green-600" />
-                                </div>
-                            </div>
-                            
-                            <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500 font-medium">Inactive Departments</p>
-                                    <p className="text-3xl font-bold">{inactiveDepartments}</p>
-                                </div>
-                                <div className="rounded-full p-3 bg-yellow-100">
-                                    <AlertTriangle className="h-6 w-6 text-yellow-600" />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Search Bar */}
-                        <div className="mb-6">
-                            <div className="relative">
-                                <div className="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
-                                    <svg className="w-4 h-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
-                                        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
-                                    </svg>
-                                </div>
-                                <input 
-                                    type="search" 
-                                    className="block w-full p-4 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500" 
-                                    placeholder="Search departments..." 
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                        
-                        {/* Status Filter Tabs - Updated to match the latest screenshot */}
-                        <div className="mb-6">
-                            <div className="flex border-b border-gray-200">
+                        {/* Tabs Navigation */}
+                        <div className="border-b border-gray-200 mb-6">
+                            <div className="flex">
                                 <button
-                                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'All Departments' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                                    onClick={() => setActiveFilter('All Departments')}
+                                    className={`px-4 py-3 text-sm font-medium text-center border-b-2 ${activeTab === 'lines' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                    onClick={() => {
+                                        setActiveTab('lines');
+                                        setActiveFilter('All');
+                                        setSearchTerm('');
+                                    }}
                                 >
-                                    All Departments
+                                    <Building className="w-4 h-4 inline-block mr-2" />
+                                    Lines
                                 </button>
                                 <button
-                                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'Active' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                                    onClick={() => setActiveFilter('Active')}
+                                    className={`px-4 py-3 text-sm font-medium text-center border-b-2 ${activeTab === 'sections' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                    onClick={() => {
+                                        setActiveTab('sections');
+                                        setActiveFilter('All');
+                                        setSearchTerm('');
+                                    }}
                                 >
-                                    <svg className="w-4 h-4 inline-block mr-1.5 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    Active
-                                </button>
-                                <button
-                                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'Inactive' ? 'border-yellow-500 text-yellow-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                                    onClick={() => setActiveFilter('Inactive')}
-                                >
-                                    <svg className="w-4 h-4 inline-block mr-1.5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                    Inactive
+                                    <Layers className="w-4 h-4 inline-block mr-2" />
+                                    Sections
                                 </button>
                             </div>
                         </div>
 
-                        {/* Virtualized table component */}
-                        <VirtualizedDepartmentsTable
-                            loading={loading}
-                            filteredDepartments={filteredDepartments}
-                            handleViewClick={handleViewClick}
-                            handleEditClick={handleEditClick}
-                            handleToggleActive={handleToggleActive}
-                            handleDelete={handleDelete}
-                        />
+                        {/* Lines Content */}
+                        {activeTab === 'lines' && (
+                            <>
+                                {/* Stats Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                    <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 font-medium">Total Lines</p>
+                                            <p className="text-3xl font-bold">{totalLines}</p>
+                                        </div>
+                                        <div className="rounded-full p-3 bg-indigo-100">
+                                            <Building className="h-6 w-6 text-indigo-600" />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 font-medium">Active Lines</p>
+                                            <p className="text-3xl font-bold">{activeLines}</p>
+                                        </div>
+                                        <div className="rounded-full p-3 bg-green-100">
+                                            <CheckCircle className="h-6 w-6 text-green-600" />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 font-medium">Inactive Lines</p>
+                                            <p className="text-3xl font-bold">{inactiveLines}</p>
+                                        </div>
+                                        <div className="rounded-full p-3 bg-yellow-100">
+                                            <AlertTriangle className="h-6 w-6 text-yellow-600" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Action Bar - Full width search */}
+                                <div className="mb-6">
+                                    <div className="relative w-full">
+                                        <div className="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                                            <Search className="w-4 h-4 text-gray-500" />
+                                        </div>
+                                        <input 
+                                            type="search" 
+                                            className="block w-full p-4 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500" 
+                                            placeholder="Search lines..." 
+                                            onChange={(e) => debouncedSearch(e.target.value)}
+                                            defaultValue={searchTerm}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Status Filter Tabs */}
+                                <div className="mb-6">
+                                    <div className="flex border-b border-gray-200">
+                                        <button
+                                            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'All' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                            onClick={() => setActiveFilter('All')}
+                                        >
+                                            All Lines
+                                        </button>
+                                        <button
+                                            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'Active' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                            onClick={() => setActiveFilter('Active')}
+                                        >
+                                            <CheckCircle className="w-4 h-4 inline-block mr-1.5 text-green-500" />
+                                            Active
+                                        </button>
+                                        <button
+                                            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'Inactive' ? 'border-yellow-500 text-yellow-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                            onClick={() => setActiveFilter('Inactive')}
+                                        >
+                                            <AlertTriangle className="w-4 h-4 inline-block mr-1.5 text-yellow-500" />
+                                            Inactive
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Lines Table */}
+                                <div className="bg-white shadow-md rounded-lg overflow-hidden">
+                                    {/* Table header - Equal sized columns */}
+                                    <div className="grid grid-cols-5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="px-6 py-3">Actions</div>
+                                        <div className="px-6 py-3">Status</div>
+                                        <div className="px-6 py-3">Code</div>
+                                        <div className="px-6 py-3">Name</div>
+                                        <div className="px-6 py-3">Department</div>
+                                    </div>
+
+                                    {/* Table Body - Loading State */}
+                                    {loading && (
+                                        <div className="py-16 text-center text-gray-500">
+                                            Loading...
+                                        </div>
+                                    )}
+
+                                    {/* Table Body - No Results */}
+                                    {!loading && filteredLines.length === 0 && (
+                                        <div className="py-16 text-center text-gray-500">
+                                            {searchTerm ? 'No lines found matching your search.' : 'No lines found. Add a line to get started.'}
+                                        </div>
+                                    )}
+
+                                    {/* Table Body - Results with equal columns */}
+                                    {!loading && filteredLines.length > 0 && (
+                                        <div className="divide-y divide-gray-200">
+                                            {filteredLines.map((line) => (
+                                                <div 
+                                                    key={line.id}
+                                                    className={`grid grid-cols-5 items-center hover:bg-gray-50 ${!line.is_active ? 'bg-yellow-50' : ''}`}
+                                                >
+                                                    {/* Actions cell */}
+                                                    <div className="px-6 py-4">
+                                                        <div className="flex space-x-3">
+                                                            <button
+                                                                onClick={() => handleViewLineClick(line)}
+                                                                className="text-gray-400 hover:text-gray-500"
+                                                                title="View"
+                                                                type="button"
+                                                            >
+                                                                <Eye className="h-5 w-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleEditLineClick(line)}
+                                                                className="text-gray-400 hover:text-gray-500"
+                                                                title="Edit"
+                                                                type="button"
+                                                            >
+                                                                <Edit className="h-5 w-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleToggleActiveLine(line)}
+                                                                className="text-gray-400 hover:text-gray-500"
+                                                                title={line.is_active ? "Deactivate" : "Activate"}
+                                                                type="button"
+                                                            >
+                                                                {line.is_active ? (
+                                                                    <ToggleRight className="h-5 w-5 text-green-500" />
+                                                                ) : (
+                                                                    <ToggleLeft className="h-5 w-5 text-gray-400" />
+                                                                )}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteLine(line)}
+                                                                className="text-gray-400 hover:text-red-500"
+                                                                title="Delete"
+                                                                type="button"
+                                                            >
+                                                                <Trash2 className="h-5 w-5" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Status cell */}
+                                                    <div className="px-6 py-4">
+                                                        <StatusBadge isActive={line.is_active} />
+                                                    </div>
+                                                    
+                                                    {/* Code cell */}
+                                                    <div className="px-6 py-4 font-medium text-gray-900">
+                                                        {line.code}
+                                                    </div>
+                                                    
+                                                    {/* Name cell */}
+                                                    <div className="px-6 py-4 text-gray-900">
+                                                        {line.name}
+                                                    </div>
+                                                    
+                                                    {/* Department cell */}
+                                                    <div className="px-6 py-4 text-gray-500">
+                                                        {line.department?.name || 'No department assigned'}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        {/* Sections Content */}
+                        {activeTab === 'sections' && (
+                            <>
+                                {/* Stats Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                    <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 font-medium">Total Sections</p>
+                                            <p className="text-3xl font-bold">{totalSections}</p>
+                                        </div>
+                                        <div className="rounded-full p-3 bg-indigo-100">
+                                            <Layers className="h-6 w-6 text-indigo-600" />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 font-medium">Active Sections</p>
+                                            <p className="text-3xl font-bold">{activeSections}</p>
+                                        </div>
+                                        <div className="rounded-full p-3 bg-green-100">
+                                            <CheckCircle className="h-6 w-6 text-green-600" />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-white shadow rounded-lg p-5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 font-medium">Inactive Sections</p>
+                                            <p className="text-3xl font-bold">{inactiveSections}</p>
+                                        </div>
+                                        <div className="rounded-full p-3 bg-yellow-100">
+                                            <AlertTriangle className="h-6 w-6 text-yellow-600" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Action Bar - Full width search */}
+                                <div className="mb-6">
+                                    <div className="relative w-full">
+                                        <div className="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                                            <Search className="w-4 h-4 text-gray-500" />
+                                        </div>
+                                        <input 
+                                            type="search" 
+                                            className="block w-full p-4 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500" 
+                                            placeholder="Search sections..." 
+                                            onChange={(e) => debouncedSearch(e.target.value)}
+                                            defaultValue={searchTerm}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Status Filter Tabs */}
+                                <div className="mb-6">
+                                    <div className="flex border-b border-gray-200">
+                                        <button
+                                            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'All' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                            onClick={() => setActiveFilter('All')}
+                                        >
+                                            All Sections
+                                        </button>
+                                        <button
+                                            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'Active' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                            onClick={() => setActiveFilter('Active')}
+                                        >
+                                            <CheckCircle className="w-4 h-4 inline-block mr-1.5 text-green-500" />
+                                            Active
+                                        </button>
+                                        <button
+                                            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${activeFilter === 'Inactive' ? 'border-yellow-500 text-yellow-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                            onClick={() => setActiveFilter('Inactive')}
+                                        >
+                                            <AlertTriangle className="w-4 h-4 inline-block mr-1.5 text-yellow-500" />
+                                            Inactive
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Sections Table */}
+                                <div className="bg-white shadow-md rounded-lg overflow-hidden">
+                                    {/* Table header - Equal sized columns */}
+                                    <div className="grid grid-cols-5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="px-6 py-3">Actions</div>
+                                        <div className="px-6 py-3">Status</div>
+                                        <div className="px-6 py-3">Code</div>
+                                        <div className="px-6 py-3">Name</div>
+                                        <div className="px-6 py-3">Line</div>
+                                    </div>
+
+                                    {/* Table Body - Loading State */}
+                                    {loading && (
+                                        <div className="py-16 text-center text-gray-500">
+                                            Loading...
+                                        </div>
+                                    )}
+
+                                    {/* Table Body - No Results */}
+                                    {!loading && filteredSections.length === 0 && (
+                                        <div className="py-16 text-center text-gray-500">
+                                            {searchTerm ? 'No sections found matching your search.' : 'No sections found. Add a section to get started.'}
+                                        </div>
+                                    )}
+
+                                    {/* Table Body - Results with equal columns */}
+                                    {!loading && filteredSections.length > 0 && (
+                                        <div className="divide-y divide-gray-200">
+                                            {filteredSections.map((section) => (
+                                                <div 
+                                                    key={section.id}
+                                                    className={`grid grid-cols-5 items-center hover:bg-gray-50 ${!section.is_active ? 'bg-yellow-50' : ''}`}
+                                                >
+                                                    {/* Actions cell */}
+                                                    <div className="px-6 py-4">
+                                                        <div className="flex space-x-3">
+                                                            <button
+                                                                onClick={() => handleViewSectionClick(section)}
+                                                                className="text-gray-400 hover:text-gray-500"
+                                                                title="View"
+                                                                type="button"
+                                                            >
+                                                                <Eye className="h-5 w-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleEditSectionClick(section)}
+                                                                className="text-gray-400 hover:text-gray-500"
+                                                                title="Edit"
+                                                                type="button"
+                                                            >
+                                                                <Edit className="h-5 w-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleToggleActiveSection(section)}
+                                                                className="text-gray-400 hover:text-gray-500"
+                                                                title={section.is_active ? "Deactivate" : "Activate"}
+                                                                type="button"
+                                                            >
+                                                                {section.is_active ? (
+                                                                    <ToggleRight className="h-5 w-5 text-green-500" />
+                                                                ) : (
+                                                                    <ToggleLeft className="h-5 w-5 text-gray-400" />
+                                                                )}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteSection(section)}
+                                                                className="text-gray-400 hover:text-red-500"
+                                                                title="Delete"
+                                                                type="button"
+                                                            >
+                                                                <Trash2 className="h-5 w-5" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Status cell */}
+                                                    <div className="px-6 py-4">
+                                                        <StatusBadge isActive={section.is_active} />
+                                                    </div>
+                                                    
+                                                    {/* Code cell */}
+                                                    <div className="px-6 py-4 font-medium text-gray-900">
+                                                        {section.code}
+                                                    </div>
+                                                    
+                                                    {/* Name cell */}
+                                                    <div className="px-6 py-4 text-gray-900">
+                                                        {section.name}
+                                                    </div>
+                                                    
+                                                    {/* Line cell */}
+                                                    <div className="px-6 py-4 text-gray-500">
+                                                        {section.line?.name || 'No line assigned'}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Department Modals */}
-            <DepartmentModal
-                isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                title="Add New Department"
-                department={currentDepartment}
-                onChange={setCurrentDepartment}
-                onSubmit={handleCreateSubmit}
+            {/* Line Modals */}
+            <LineModal
+                isOpen={isCreateLineModalOpen}
+                onClose={() => setIsCreateLineModalOpen(false)}
+                title="Add New Line"
+                line={currentLine}
+                departments={departments}
+                onChange={setCurrentLine}
+                onSubmit={handleCreateLineSubmit}
                 mode="create"
+                errorMessages={lineErrors}
             />
 
-            <DepartmentModal
-                isOpen={isEditModalOpen}
-                onClose={() => setIsEditModalOpen(false)}
-                title="Edit Department"
-                department={currentDepartment}
-                onChange={setCurrentDepartment}
-                onSubmit={handleUpdateSubmit}
+            <LineModal
+                isOpen={isEditLineModalOpen}
+                onClose={() => setIsEditLineModalOpen(false)}
+                title="Edit Line"
+                line={currentLine}
+                departments={departments}
+                onChange={setCurrentLine}
+                onSubmit={handleUpdateLineSubmit}
                 mode="edit"
+                errorMessages={lineErrors}
             />
 
-            <DepartmentModal
-                isOpen={isViewModalOpen}
-                onClose={() => setIsViewModalOpen(false)}
-                title="View Department Details"
-                department={currentDepartment}
-                onChange={setCurrentDepartment}
+            <LineModal
+                isOpen={isViewLineModalOpen}
+                onClose={() => setIsViewLineModalOpen(false)}
+                title="View Line Details"
+                line={currentLine}
+                departments={departments}
+                onChange={setCurrentLine}
+                onSubmit={() => {}} // No submit action for view mode
+                mode="view"
+            />
+
+            {/* Section Modals */}
+            <SectionModal
+                isOpen={isCreateSectionModalOpen}
+                onClose={() => setIsCreateSectionModalOpen(false)}
+                title="Add New Section"
+                section={currentSection}
+                lines={lines}
+                onChange={setCurrentSection}
+                onSubmit={handleCreateSectionSubmit}
+                mode="create"
+                errorMessages={sectionErrors}
+            />
+
+            <SectionModal
+                isOpen={isEditSectionModalOpen}
+                onClose={() => setIsEditSectionModalOpen(false)}
+                title="Edit Section"
+                section={currentSection}
+                lines={lines}
+                onChange={setCurrentSection}
+                onSubmit={handleUpdateSectionSubmit}
+                mode="edit"
+                errorMessages={sectionErrors}
+            />
+
+            <SectionModal
+                isOpen={isViewSectionModalOpen}
+                onClose={() => setIsViewSectionModalOpen(false)}
+                title="View Section Details"
+                section={currentSection}
+                lines={lines}
+                onChange={setCurrentSection}
                 onSubmit={() => {}} // No submit action for view mode
                 mode="view"
             />
@@ -760,4 +1288,4 @@ const Departments = () => {
     );
 };
 
-export default Departments;
+export default LinesAndSections;

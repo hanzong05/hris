@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -13,14 +13,21 @@ import {
 
 const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) => {
     const [statusFilter, setStatusFilter] = useState('all');
+    const [filteredEmployees, setFilteredEmployees] = useState([]);
     
-    if (!employees?.length) {
-        return <div className="p-4 text-center text-gray-500">No employees found</div>;
-    }
-
-    const filteredEmployees = statusFilter === 'all' 
-        ? employees 
-        : employees.filter(employee => employee.JobStatus === statusFilter);
+    // Apply filters whenever status filter or employees list changes
+    useEffect(() => {
+        // If employees data exists, apply filtering
+        if (employees && employees.length > 0) {
+            const filtered = statusFilter === 'all' 
+                ? employees 
+                : employees.filter(employee => employee.JobStatus === statusFilter);
+            
+            setFilteredEmployees(filtered);
+        } else {
+            setFilteredEmployees([]);
+        }
+    }, [statusFilter, employees]);
 
     const getStatusBadge = (status) => {
         switch(status) {
@@ -36,6 +43,11 @@ const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) =
                 return <Badge className="bg-gray-100 text-gray-800 border-gray-200">{status || 'Unknown'}</Badge>;
         }
     };
+
+    // Show empty state when no employees are found
+    if (!employees || employees.length === 0) {
+        return <div className="p-4 text-center text-gray-500">No employees found</div>;
+    }
 
     return (
         <div>
@@ -133,7 +145,7 @@ const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) =
 
                     <tbody className="bg-white divide-y divide-gray-200">
                         {filteredEmployees.map((employee) => (
-                            <tr key={employee.id} className="hover:bg-gray-50">
+                            <tr key={employee.id || employee.idno} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex space-x-2">
                                         <Button 
@@ -156,7 +168,7 @@ const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) =
                                             <Button 
                                                 variant="outline"
                                                 className="p-2 text-red-500 hover:text-white hover:bg-red-500"
-                                                onClick={() => onUpdateStatus(employee.id, 'Blocked')}
+                                                onClick={() => onUpdateStatus(employee.id || employee.idno, 'Blocked')}
                                                 title="Block Employee"
                                             >
                                                 <UserX className="h-4 w-4" />
@@ -167,7 +179,7 @@ const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) =
                                             <Button 
                                                 variant="outline"
                                                 className="p-2 text-yellow-500 hover:text-white hover:bg-yellow-500"
-                                                onClick={() => onUpdateStatus(employee.id, 'Inactive')}
+                                                onClick={() => onUpdateStatus(employee.id || employee.idno, 'Inactive')}
                                                 title="Set as Inactive"
                                             >
                                                 <UserMinus className="h-4 w-4" />
@@ -178,7 +190,7 @@ const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) =
                                             <Button 
                                                 variant="outline"
                                                 className="p-2 text-green-500 hover:text-white hover:bg-green-500"
-                                                onClick={() => onUpdateStatus(employee.id, 'Active')}
+                                                onClick={() => onUpdateStatus(employee.id || employee.idno, 'Active')}
                                                 title="Activate Employee"
                                             >
                                                 <UserCheck className="h-4 w-4" />
@@ -188,7 +200,7 @@ const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) =
                                         <Button 
                                             variant="destructive"
                                             className="p-2"
-                                            onClick={() => onDelete(employee.id)}
+                                            onClick={() => onDelete(employee.id || employee.idno)}
                                         >
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -196,13 +208,13 @@ const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) =
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">{employee.idno}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    {`${employee.Lname}, ${employee.Fname} ${employee.MName || ''}`}
+                                    {`${employee.Lname || ''}, ${employee.Fname || ''} ${employee.MName || ''}`}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     {getStatusBadge(employee.JobStatus)}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">{employee.Department}</td>
-                                <td className="px-6 py-4 whitespace-nowrap">{employee.Jobtitle}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{employee.Department || '-'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{employee.Jobtitle || '-'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">{employee.Email || '-'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">{employee.ContactNo || '-'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -224,4 +236,77 @@ const EmployeeList = ({ employees, onEdit, onDelete, onView, onUpdateStatus }) =
     );
 };
 
+// Here's a sample implementation of the parent component that would use this EmployeeList
+// You can adapt this to your specific setup
+
+const EmployeeManagement = () => {
+    const [employees, setEmployees] = useState([]);
+    
+    useEffect(() => {
+        // Function to fetch employees
+        const fetchEmployees = async () => {
+            try {
+                // Replace with your actual API call
+                const response = await fetch('/api/employees');
+                const data = await response.json();
+                setEmployees(data);
+            } catch (error) {
+                console.error('Error fetching employees:', error);
+            }
+        };
+        
+        fetchEmployees();
+    }, []);
+    
+    const handleEdit = (employee) => {
+        // Implement edit functionality
+    };
+    
+    const handleDelete = (employeeId) => {
+        // Implement delete functionality
+    };
+    
+    const handleView = (employee) => {
+        // Implement view functionality
+    };
+    
+    const handleUpdateStatus = async (employeeId, newStatus) => {
+        try {
+            // Replace with your actual API call
+            await fetch(`/api/employees/${employeeId}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            
+            // Update local state after successful API call
+            setEmployees(employees.map(emp => 
+                (emp.id === employeeId || emp.idno === employeeId) 
+                ? { ...emp, JobStatus: newStatus } 
+                : emp
+            ));
+        } catch (error) {
+            console.error('Error updating employee status:', error);
+        }
+    };
+    
+    return (
+        <div className="container mx-auto px-4 py-8">
+            <h1 className="text-2xl font-bold mb-6">Employee Management</h1>
+            
+            <EmployeeList 
+                employees={employees}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onView={handleView}
+                onUpdateStatus={handleUpdateStatus}
+            />
+        </div>
+    );
+};
+
 export default EmployeeList;
+// You can also export the parent component if needed
+// export { EmployeeManagement };
