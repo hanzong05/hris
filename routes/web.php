@@ -399,5 +399,68 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::patch('/sections/{id}/toggle-active', [SectionController::class, 'toggleActive']);
 });
 
+// CoreHR Routes
+Route::middleware(['role:superadmin,hrd'])->group(function () {
+    // Promotion Routes
+    Route::get('/core-hr/promotions', [PromotionController::class, 'index'])->name('promotions.index');
+    Route::get('/promotions/list', [PromotionController::class, 'list'])->name('promotions.list');
+    Route::post('/promotions', [PromotionController::class, 'store'])->name('promotions.store');
+    Route::put('/promotions/{id}', [PromotionController::class, 'update'])->name('promotions.update');
+    Route::post('/promotions/{id}/status', [PromotionController::class, 'updateStatus'])->name('promotions.updateStatus');
+    Route::delete('/promotions/{id}', [PromotionController::class, 'destroy'])->name('promotions.destroy');
+    Route::get('/promotions/export', [PromotionController::class, 'export'])->name('promotions.export');
+    
+    // Award Routes
+    Route::get('/core-hr/awards', [AwardController::class, 'index'])->name('awards.index');
+    Route::get('/awards/list', [AwardController::class, 'list'])->name('awards.list');
+    Route::post('/awards', [AwardController::class, 'store'])->name('awards.store');
+    Route::put('/awards/{id}', [AwardController::class, 'update'])->name('awards.update');
+    Route::delete('/awards/{id}', [AwardController::class, 'destroy'])->name('awards.destroy');
+    Route::get('/awards/export', [AwardController::class, 'export'])->name('awards.export');
+    
+    // Transfer Routes
+    Route::get('/core-hr/transfers', [TransferController::class, 'index'])->name('transfers.index');
+    Route::get('/transfers/list', [TransferController::class, 'list'])->name('transfers.list');
+    Route::post('/transfers', [TransferController::class, 'store'])->name('transfers.store');
+    Route::put('/transfers/{id}', [TransferController::class, 'update'])->name('transfers.update');
+    Route::post('/transfers/{id}/status', [TransferController::class, 'updateStatus'])->name('transfers.updateStatus');
+    Route::delete('/transfers/{id}', [TransferController::class, 'destroy'])->name('transfers.destroy');
+    Route::get('/transfers/export', [TransferController::class, 'export'])->name('transfers.export');
+    
+    // Resignation Routes
+    Route::get('/core-hr/resignations', [ResignationController::class, 'index'])->name('resignations.index');
+    Route::get('/resignations/list', [ResignationController::class, 'list'])->name('resignations.list');
+    Route::post('/resignations', [ResignationController::class, 'store'])->name('resignations.store');
+    Route::put('/resignations/{id}', [ResignationController::class, 'update'])->name('resignations.update');
+    Route::post('/resignations/{id}/status', [ResignationController::class, 'updateStatus'])->name('resignations.updateStatus');
+    Route::delete('/resignations/{id}', [ResignationController::class, 'destroy'])->name('resignations.destroy');
+    Route::get('/resignations/export', [ResignationController::class, 'export'])->name('resignations.export');
+
+    // Complaint Routes
+    Route::get('/core-hr/complaints', [ComplaintController::class, 'index'])->name('complaints.index');
+    Route::get('/complaints/list', [ComplaintController::class, 'list'])->name('complaints.list');
+    Route::post('/complaints', [ComplaintController::class, 'store'])->name('complaints.store');
+    Route::put('/complaints/{id}', [ComplaintController::class, 'update'])->name('complaints.update');
+    Route::post('/complaints/{id}/status', [ComplaintController::class, 'updateStatus'])->name('complaints.updateStatus');
+    Route::delete('/complaints/{id}', [ComplaintController::class, 'destroy'])->name('complaints.destroy');
+    Route::get('/complaints/export', [ComplaintController::class, 'export'])->name('complaints.export');
+
+    // Warning Routes
+    Route::get('/core-hr/warnings', [WarningController::class, 'index'])->name('warnings.index');
+    Route::get('/warnings/list', [WarningController::class, 'list'])->name('warnings.list');
+    Route::post('/warnings', [WarningController::class, 'store'])->name('warnings.store');
+    Route::put('/warnings/{id}', [WarningController::class, 'update'])->name('warnings.update');
+    Route::delete('/warnings/{id}', [WarningController::class, 'destroy'])->name('warnings.destroy');
+    Route::get('/warnings/export', [WarningController::class, 'export'])->name('warnings.export');
+
+    // Termination Routes
+    Route::get('/core-hr/terminations', [TerminationController::class, 'index'])->name('terminations.index');
+    Route::get('/terminations/list', [TerminationController::class, 'list'])->name('terminations.list');
+    Route::post('/terminations', [TerminationController::class, 'store'])->name('terminations.store');
+    Route::put('/terminations/{id}', [TerminationController::class, 'update'])->name('terminations.update');
+    Route::post('/terminations/{id}/status', [TerminationController::class, 'updateStatus'])->name('terminations.updateStatus');
+    Route::delete('/terminations/{id}', [TerminationController::class, 'destroy'])->name('terminations.destroy');
+    Route::get('/terminations/export', [TerminationController::class, 'export'])->name('terminations.export');
+});
 // Include additional authentication routes
 require __DIR__.'/auth.php';
