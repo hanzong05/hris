@@ -21,6 +21,9 @@ use App\Http\Controllers\ProcessedAttendanceController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\LineController;
+use App\Http\Controllers\SectionController;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -335,6 +338,46 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
+});
+// Management Routes
+Route::middleware(['role:superadmin,hrd'])->prefix('manage')->group(function () {
+    Route::get('/departments', function () {
+        return Inertia::render('Manage/Departments', [
+            'auth' => [
+                'user' => Auth::user()
+            ]
+        ]);
+    })->name('manage.departments');
+    
+    Route::get('/lines-sections', function () {
+        return Inertia::render('Manage/LineAndSection');
+    })->name('manage.lines-sections');
+    
+    Route::get('/roles-access', function () {
+        return Inertia::render('Manage/RolesAndAccess');
+    })->name('manage.roles-access');
+});
+Route::middleware(['auth:sanctum'])->group(function () {
+    // Department routes
+    Route::get('/departments', [DepartmentController::class, 'index']);
+    Route::post('/departments', [DepartmentController::class, 'store']);
+    Route::put('/departments/{id}', [DepartmentController::class, 'update']);
+    Route::delete('/departments/{id}', [DepartmentController::class, 'destroy']);
+    Route::patch('/departments/{id}/toggle-active', [DepartmentController::class, 'toggleActive']);
+    
+    // Line routes
+    Route::get('/lines', [LineController::class, 'index']);
+    Route::post('/lines', [LineController::class, 'store']);
+    Route::put('/lines/{id}', [LineController::class, 'update']);
+    Route::delete('/lines/{id}', [LineController::class, 'destroy']);
+    Route::patch('/lines/{id}/toggle-active', [LineController::class, 'toggleActive']);
+
+    // Section routes
+    Route::get('/sections', [SectionController::class, 'index']);
+    Route::post('/sections', [SectionController::class, 'store']);
+    Route::put('/sections/{id}', [SectionController::class, 'update']);
+    Route::delete('/sections/{id}', [SectionController::class, 'destroy']);
+    Route::patch('/sections/{id}/toggle-active', [SectionController::class, 'toggleActive']);
 });
 
 // Include additional authentication routes
