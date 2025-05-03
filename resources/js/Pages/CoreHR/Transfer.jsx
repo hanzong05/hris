@@ -111,24 +111,24 @@ const TransferModal = ({
                 </div>
                 
                 <form onSubmit={onSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
-                        <select
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.employee_id ? 'border-red-500' : ''}`}
-                            value={transfer.employee_id || ''}
-                            onChange={(e) => onChange({...transfer, employee_id: e.target.value})}
-                            required
-                            disabled={isViewMode}
-                        >
-                            <option value="">Select Employee</option>
-                            {employees.map(employee => (
-                                <option key={employee.id} value={employee.id}>
-                                    {employee.Lname}, {employee.Fname} ({employee.idno})
-                                </option>
-                            ))}
-                        </select>
-                        {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
-                    </div>
+                <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+    <select
+        className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.employee_id ? 'border-red-500' : ''}`}
+        value={transfer.employee_id || ''}
+        onChange={(e) => onChange({...transfer, employee_id: e.target.value})}
+        required
+        disabled={isViewMode}
+    >
+        <option value="">Select Employee</option>
+        {employees.map(employee => (
+            <option key={employee.id} value={employee.id}>
+                {employee.Lname}, {employee.Fname} ({employee.idno})
+            </option>
+        ))}
+    </select>
+    {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
+</div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>

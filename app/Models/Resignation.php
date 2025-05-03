@@ -27,13 +27,31 @@ class Resignation extends Model
         'approved_at' => 'datetime'
     ];
 
+    // Relationship with Employee model
     public function employee()
     {
         return $this->belongsTo(Employee::class);
     }
 
+    // Relationship with User model for approver
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    // Optional: Scope for different statuses
+    public function scopePending($query)
+    {
+        return $query->where('status', 'pending');
+    }
+
+    public function scopeApproved($query)
+    {
+        return $query->where('status', 'approved');
+    }
+
+    public function scopeRejected($query)
+    {
+        return $query->where('status', 'rejected');
     }
 }

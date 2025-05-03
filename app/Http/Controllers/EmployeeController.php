@@ -200,6 +200,33 @@ class EmployeeController extends Controller
         
         return back()->with('message', 'Employee activated successfully.');
     }
+    public function list(Request $request)
+    {
+        $query = Employee::query();
+        
+        // Filter by active status if requested
+        if ($request->has('active_only') && $request->active_only == true) {
+            $query->where('JobStatus', 'Active');
+        }
+        
+        // Optional: Filter by name for search functionality
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('Fname', 'like', "%{$search}%")
+                  ->orWhere('Lname', 'like', "%{$search}%")
+                  ->orWhere('idno', 'like', "%{$search}%");
+            });
+        }
+        
+        // Sort employees by last name, first name
+        $query->orderBy('Lname')->orderBy('Fname');
+        
+        return response()->json([
+            'data' => $query->get()
+        ]);
+    }
+
 
     /**
      * Show import page

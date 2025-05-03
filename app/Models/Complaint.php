@@ -27,18 +27,42 @@ class Complaint extends Model
         'resolution_date' => 'date'
     ];
 
+    // Relationship with Employee model for the employee being complained about
     public function employee()
     {
         return $this->belongsTo(Employee::class);
     }
 
+    // Relationship with Employee model for the complainant
     public function complainant()
     {
         return $this->belongsTo(Employee::class, 'complainant_id');
     }
 
+    // Relationship with User model for the person assigned to handle the complaint
     public function assignedTo()
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    // Optional: Scope methods for easy status filtering
+    public function scopePending($query)
+    {
+        return $query->where('status', 'pending');
+    }
+
+    public function scopeInProgress($query)
+    {
+        return $query->where('status', 'in_progress');
+    }
+
+    public function scopeResolved($query)
+    {
+        return $query->where('status', 'resolved');
+    }
+
+    public function scopeClosed($query)
+    {
+        return $query->where('status', 'closed');
     }
 }

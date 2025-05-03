@@ -111,24 +111,24 @@ const ResignationModal = ({
                 </div>
                 
                 <form onSubmit={onSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
-                        <select
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.employee_id ? 'border-red-500' : ''}`}
-                            value={resignation.employee_id || ''}
-                            onChange={(e) => onChange({...resignation, employee_id: e.target.value})}
-                            required
-                            disabled={isViewMode}
-                        >
-                            <option value="">Select Employee</option>
-                            {employees.map(employee => (
-                                <option key={employee.id} value={employee.id}>
-                                    {employee.Lname}, {employee.Fname} ({employee.idno})
-                                </option>
-                            ))}
-                        </select>
-                        {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
-                    </div>
+                <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+    <select
+        className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.employee_id ? 'border-red-500' : ''}`}
+        value={resignation.employee_id || ''}
+        onChange={(e) => onChange({...resignation, employee_id: e.target.value})}
+        required
+        disabled={isViewMode}
+    >
+        <option value="">Select Employee</option>
+        {employees.map(employee => (
+            <option key={employee.id} value={employee.id}>
+                {employee.Lname}, {employee.Fname} ({employee.idno})
+            </option>
+        ))}
+    </select>
+    {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
+</div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -474,11 +474,11 @@ const Resignations = () => {
                         date_to: dateFilter.to || null
                     }
                 }),
-                axios.get('/employees/list', { params: { active_only: true } })
+                axios.get('/employees/list', { params: { active_only: true } })  // This endpoint doesn't exist
             ]);
             
             setResignations(resignationsResponse.data.data || []);
-            setEmployees(employeesResponse.data.data || []);
+            setEmployees(employeesResponse.data.data || []);  // This stores employees in state
         } catch (error) {
             console.error('Error loading data:', error);
             showToast('Error loading data: ' + (error.response?.data?.message || error.message), 'error');

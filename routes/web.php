@@ -18,12 +18,17 @@ use App\Http\Controllers\RetroController;
 use App\Http\Controllers\Auth\EmployeeRegistrationController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ProcessedAttendanceController;
+use App\Http\Controllers\PromotionController;
+use App\Http\Controllers\AwardController;
+use App\Http\Controllers\TransferController;
+use App\Http\Controllers\ResignationController;
+use App\Http\Controllers\ComplaintController;
+use App\Http\Controllers\WarningController;
+use App\Http\Controllers\TerminationController;
+
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Controllers\DepartmentController;
-use App\Http\Controllers\LineController;
-use App\Http\Controllers\SectionController;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -106,7 +111,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     ->prefix('employees')
     ->group(function () {
         Route::get('/', [EmployeeController::class, 'index'])->name('employees.index');
-        Route::get('/list', [EmployeeController::class, 'index'])->name('employees.list');
+        Route::get('/list', [EmployeeController::class, 'list'])->name('employees.list'); // Add this line
         Route::post('/', [EmployeeController::class, 'store'])->name('employees.store');
         Route::put('/{id}', [EmployeeController::class, 'update'])->name('employees.update');
         Route::delete('/{id}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
@@ -400,35 +405,52 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 // CoreHR Routes
+// CoreHR Routes
 Route::middleware(['role:superadmin,hrd'])->group(function () {
     // Promotion Routes
-    Route::get('/core-hr/promotions', [PromotionController::class, 'index'])->name('promotions.index');
+    Route::get('/core-hr/promotion', function () {
+        return Inertia::render('CoreHR/Promotion', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('promotions.page');
     Route::get('/promotions/list', [PromotionController::class, 'list'])->name('promotions.list');
     Route::post('/promotions', [PromotionController::class, 'store'])->name('promotions.store');
     Route::put('/promotions/{id}', [PromotionController::class, 'update'])->name('promotions.update');
     Route::post('/promotions/{id}/status', [PromotionController::class, 'updateStatus'])->name('promotions.updateStatus');
     Route::delete('/promotions/{id}', [PromotionController::class, 'destroy'])->name('promotions.destroy');
     Route::get('/promotions/export', [PromotionController::class, 'export'])->name('promotions.export');
-    
+
     // Award Routes
-    Route::get('/core-hr/awards', [AwardController::class, 'index'])->name('awards.index');
+    Route::get('/core-hr/award', function () {
+        return Inertia::render('CoreHR/Award', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('awards.page');
     Route::get('/awards/list', [AwardController::class, 'list'])->name('awards.list');
     Route::post('/awards', [AwardController::class, 'store'])->name('awards.store');
     Route::put('/awards/{id}', [AwardController::class, 'update'])->name('awards.update');
     Route::delete('/awards/{id}', [AwardController::class, 'destroy'])->name('awards.destroy');
     Route::get('/awards/export', [AwardController::class, 'export'])->name('awards.export');
-    
+
     // Transfer Routes
-    Route::get('/core-hr/transfers', [TransferController::class, 'index'])->name('transfers.index');
+    Route::get('/core-hr/transfer', function () {
+        return Inertia::render('CoreHR/Transfer', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('transfers.page');
     Route::get('/transfers/list', [TransferController::class, 'list'])->name('transfers.list');
     Route::post('/transfers', [TransferController::class, 'store'])->name('transfers.store');
     Route::put('/transfers/{id}', [TransferController::class, 'update'])->name('transfers.update');
     Route::post('/transfers/{id}/status', [TransferController::class, 'updateStatus'])->name('transfers.updateStatus');
     Route::delete('/transfers/{id}', [TransferController::class, 'destroy'])->name('transfers.destroy');
     Route::get('/transfers/export', [TransferController::class, 'export'])->name('transfers.export');
-    
+
     // Resignation Routes
-    Route::get('/core-hr/resignations', [ResignationController::class, 'index'])->name('resignations.index');
+    Route::get('/core-hr/resignations', function () {
+        return Inertia::render('CoreHR/Resignations', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('resignations.page');
     Route::get('/resignations/list', [ResignationController::class, 'list'])->name('resignations.list');
     Route::post('/resignations', [ResignationController::class, 'store'])->name('resignations.store');
     Route::put('/resignations/{id}', [ResignationController::class, 'update'])->name('resignations.update');
@@ -437,7 +459,11 @@ Route::middleware(['role:superadmin,hrd'])->group(function () {
     Route::get('/resignations/export', [ResignationController::class, 'export'])->name('resignations.export');
 
     // Complaint Routes
-    Route::get('/core-hr/complaints', [ComplaintController::class, 'index'])->name('complaints.index');
+    Route::get('/core-hr/complaints', function () {
+        return Inertia::render('CoreHR/Complaints', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('complaints.page');
     Route::get('/complaints/list', [ComplaintController::class, 'list'])->name('complaints.list');
     Route::post('/complaints', [ComplaintController::class, 'store'])->name('complaints.store');
     Route::put('/complaints/{id}', [ComplaintController::class, 'update'])->name('complaints.update');
@@ -446,7 +472,11 @@ Route::middleware(['role:superadmin,hrd'])->group(function () {
     Route::get('/complaints/export', [ComplaintController::class, 'export'])->name('complaints.export');
 
     // Warning Routes
-    Route::get('/core-hr/warnings', [WarningController::class, 'index'])->name('warnings.index');
+    Route::get('/core-hr/warnings', function () {
+        return Inertia::render('CoreHR/Warnings', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('warnings.page');
     Route::get('/warnings/list', [WarningController::class, 'list'])->name('warnings.list');
     Route::post('/warnings', [WarningController::class, 'store'])->name('warnings.store');
     Route::put('/warnings/{id}', [WarningController::class, 'update'])->name('warnings.update');
@@ -454,13 +484,31 @@ Route::middleware(['role:superadmin,hrd'])->group(function () {
     Route::get('/warnings/export', [WarningController::class, 'export'])->name('warnings.export');
 
     // Termination Routes
-    Route::get('/core-hr/terminations', [TerminationController::class, 'index'])->name('terminations.index');
+    Route::get('/core-hr/terminations', function () {
+        return Inertia::render('CoreHR/Termination', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('terminations.page');
     Route::get('/terminations/list', [TerminationController::class, 'list'])->name('terminations.list');
     Route::post('/terminations', [TerminationController::class, 'store'])->name('terminations.store');
     Route::put('/terminations/{id}', [TerminationController::class, 'update'])->name('terminations.update');
     Route::post('/terminations/{id}/status', [TerminationController::class, 'updateStatus'])->name('terminations.updateStatus');
     Route::delete('/terminations/{id}', [TerminationController::class, 'destroy'])->name('terminations.destroy');
     Route::get('/terminations/export', [TerminationController::class, 'export'])->name('terminations.export');
+
+    // Travel Routes
+    Route::get('/core-hr/travel', function () {
+        return Inertia::render('CoreHR/Travel', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('travel.page');
+    Route::get('/travel/list', [TravelController::class, 'list'])->name('travel.list');
+    Route::post('/travel', [TravelController::class, 'store'])->name('travel.store');
+    Route::put('/travel/{id}', [TravelController::class, 'update'])->name('travel.update');
+    Route::post('/travel/{id}/status', [TravelController::class, 'updateStatus'])->name('travel.updateStatus');
+    Route::delete('/travel/{id}', [TravelController::class, 'destroy'])->name('travel.destroy');
+    Route::get('/travel/export', [TravelController::class, 'export'])->name('travel.export');
 });
+
 // Include additional authentication routes
 require __DIR__.'/auth.php';
