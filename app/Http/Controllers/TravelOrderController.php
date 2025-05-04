@@ -24,10 +24,55 @@ class TravelOrderController extends Controller
      */
     public function index()
     {
-        $travelOrders = TravelOrder::with('employee')->latest()->get();
-        $employees = Employee::select(['id', 'idno', 'Lname', 'Fname', 'MName', 'Department', 'Jobtitle'])->get();
-        $departments = Employee::distinct()->pluck('Department')->filter()->values();
-        
+        // Eager load the employee relationship and ensure proper serialization
+        $travelOrders = TravelOrder::with('employee')
+            ->latest()
+            ->get()
+            ->map(function ($order) {
+                return [
+                    'id' => $order->id,
+                    'employee' => $order->employee ? [
+                        'id' => $order->employee->id,
+                        'Lname' => $order->employee->Lname,
+                        'Fname' => $order->employee->Fname,
+                        'MName' => $order->employee->MName,
+                        'idno' => $order->employee->idno,
+                        'Department' => $order->employee->Department,
+                        'Jobtitle' => $order->employee->Jobtitle
+                    ] : null,
+                    'date' => $order->date,
+                    'start_date' => $order->start_date,
+                    'end_date' => $order->end_date,
+                    'destination' => $order->destination,
+                    'transportation_type' => $order->transportation_type,
+                    'purpose' => $order->purpose,
+                    'accommodation_required' => $order->accommodation_required,
+                    'meal_allowance' => $order->meal_allowance,
+                    'other_expenses' => $order->other_expenses,
+                    'estimated_cost' => $order->estimated_cost,
+                    'total_days' => $order->total_days,
+                    'status' => $order->status,
+                    'approved_by' => $order->approved_by,
+                    'approved_at' => $order->approved_at,
+                    'remarks' => $order->remarks
+                ];
+            });
+    
+        $employees = Employee::select([
+            'id', 
+            'idno', 
+            'Lname', 
+            'Fname', 
+            'MName', 
+            'Department', 
+            'Jobtitle'
+        ])->get();
+    
+        $departments = Employee::distinct()
+            ->pluck('Department')
+            ->filter()
+            ->values();
+    
         return Inertia::render('TravelOrder/TravelOrderPage', [
             'travelOrders' => $travelOrders,
             'employees' => $employees,
