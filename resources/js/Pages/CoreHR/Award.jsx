@@ -371,6 +371,12 @@ const Award = () => {
         setToast({ ...toast, visible: false });
     };
 
+    // Handle search input change
+    const handleSearchChange = (e) => {
+        const value = e.target.value;
+        debouncedSearch(value);
+    };
+
     // Debounced search handler
     const debouncedSearch = debounce((value) => {
         setSearchTerm(value);
@@ -532,6 +538,19 @@ const Award = () => {
         return types;
     };
 
+    // Handle reset filters
+    const handleResetFilters = () => {
+        setSearchTerm('');
+        setAwardTypeFilter('all');
+        setDateFilter({ from: '', to: '' });
+        
+        // Reset the search input field
+        const searchInput = document.querySelector('input[placeholder="Search by name or award..."]');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+    };
+
     return (
         <AuthenticatedLayout>
             <Head title="Employee Awards" />
@@ -581,7 +600,7 @@ const Award = () => {
                                             type="text"
                                             className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                             placeholder="Search by name or award..."
-                                            onChange={(e) => debouncedSearch(e.target.value)}
+                                            onChange={handleSearchChange}
                                         />
                                     </div>
                                 </div>
@@ -626,6 +645,19 @@ const Award = () => {
                                     </div>
                                 </div>
                             </div>
+                            
+                            {/* Reset Filters Button */}
+                            {(searchTerm || awardTypeFilter !== 'all' || dateFilter.from || dateFilter.to) && (
+                                <div className="mt-4 flex justify-end">
+                                    <Button
+                                        onClick={handleResetFilters}
+                                        variant="outline"
+                                        className="text-sm"
+                                    >
+                                        Reset Filters
+                                    </Button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Awards List/Grid */}
