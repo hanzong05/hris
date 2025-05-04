@@ -98,56 +98,66 @@ const TerminationModal = ({
     const [documentFile, setDocumentFile] = useState(null);
     
     // Filter employees when search term or employees list changes
-    useEffect(() => {
-        if (!Array.isArray(employees)) {
-            setFilteredEmployees([]);
-            return;
-        }
+  // Filter employees when search term or employees list changes - first useEffect
+useEffect(() => {
+    if (!Array.isArray(employees)) {
+        setFilteredEmployees([]);
+        return;
+    }
+    
+    if (!employeeSearchTerm.trim()) {
+        setFilteredEmployees(employees);
+        return;
+    }
+    
+    const searchTermLower = employeeSearchTerm.toLowerCase();
+    const filtered = employees.filter(employee => {
+        const firstName = (employee.Fname || '').toLowerCase();
+        const lastName = (employee.Lname || '').toLowerCase();
+        const idNo = (employee.idno || '').toLowerCase();
+        const fullName = `${firstName} ${lastName}`.toLowerCase();
+        const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
         
-        if (!employeeSearchTerm.trim()) {
-            setFilteredEmployees(employees);
-            return;
-        }
+        return firstName.includes(searchTermLower) || 
+               lastName.includes(searchTermLower) || 
+               idNo.includes(searchTermLower) ||
+               fullName.includes(searchTermLower) ||
+               fullNameReversed.includes(searchTermLower);
+    });
+    
+    setFilteredEmployees(filtered);
+}, [employeeSearchTerm, employees]);
+
+// Handle exact match selection - second useEffect
+useEffect(() => {
+    if (!employeeSearchTerm.trim() || !Array.isArray(filteredEmployees) || filteredEmployees.length === 0) {
+        return;
+    }
+    
+    const searchTermLower = employeeSearchTerm.toLowerCase();
+    
+    // Check for exact match only when search term changes
+    const exactMatch = filteredEmployees.find(employee => {
+        const firstName = (employee.Fname || '').toLowerCase();
+        const lastName = (employee.Lname || '').toLowerCase();
+        const idNo = (employee.idno || '').toLowerCase();
+        const fullName = `${firstName} ${lastName}`.toLowerCase();
+        const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+        const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
         
-        const searchTermLower = employeeSearchTerm.toLowerCase();
-        const filtered = employees.filter(employee => {
-            const firstName = (employee.Fname || '').toLowerCase();
-            const lastName = (employee.Lname || '').toLowerCase();
-            const idNo = (employee.idno || '').toLowerCase();
-            const fullName = `${firstName} ${lastName}`.toLowerCase();
-            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
-            
-            return firstName.includes(searchTermLower) || 
-                   lastName.includes(searchTermLower) || 
-                   idNo.includes(searchTermLower) ||
-                   fullName.includes(searchTermLower) ||
-                   fullNameReversed.includes(searchTermLower);
-        });
-        
-        // Check for exact match to automatically select
-        const exactMatch = filtered.find(employee => {
-            const firstName = (employee.Fname || '').toLowerCase();
-            const lastName = (employee.Lname || '').toLowerCase();
-            const idNo = (employee.idno || '').toLowerCase();
-            const fullName = `${firstName} ${lastName}`.toLowerCase();
-            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
-            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
-            
-            return firstName === searchTermLower || 
-                   lastName === searchTermLower || 
-                   idNo === searchTermLower ||
-                   fullName === searchTermLower ||
-                   fullNameReversed === searchTermLower ||
-                   fullNameWithId === searchTermLower;
-        });
-        
-        // If exact match found, select that employee
-        if (exactMatch) {
-            onChange({...termination, employee_id: exactMatch.id});
-        }
-        
-        setFilteredEmployees(filtered);
-    }, [employeeSearchTerm, employees, onChange, termination]);
+        return firstName === searchTermLower || 
+               lastName === searchTermLower || 
+               idNo === searchTermLower ||
+               fullName === searchTermLower ||
+               fullNameReversed === searchTermLower ||
+               fullNameWithId === searchTermLower;
+    });
+    
+    // If exact match found and it's different from current selection, update it
+    if (exactMatch && exactMatch.id !== termination.employee_id) {
+        onChange({...termination, employee_id: exactMatch.id});
+    }
+}, [employeeSearchTerm, filteredEmployees, termination.employee_id, onChange]);
     
     // Reset search term when modal opens
     useEffect(() => {

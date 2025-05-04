@@ -101,57 +101,58 @@ const ResignationModal = ({
     const [filteredEmployees, setFilteredEmployees] = useState([]);
     
     // Filter employees when search term or employees list changes
-    useEffect(() => {
-        if (!Array.isArray(employees)) {
-            setFilteredEmployees([]);
-            return;
-        }
-        
-        if (!employeeSearchTerm.trim()) {
-            setFilteredEmployees(employees);
-            return;
-        }
-        
-        const searchTermLower = employeeSearchTerm.toLowerCase();
-        const filtered = employees.filter(employee => {
-            const firstName = (employee.Fname || '').toLowerCase();
-            const lastName = (employee.Lname || '').toLowerCase();
-            const idNo = (employee.idno || '').toLowerCase();
-            const fullName = `${firstName} ${lastName}`.toLowerCase();
-            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
-            
-            return firstName.includes(searchTermLower) || 
-                   lastName.includes(searchTermLower) || 
-                   idNo.includes(searchTermLower) ||
-                   fullName.includes(searchTermLower) ||
-                   fullNameReversed.includes(searchTermLower);
-        });
-        
-        // Check for exact match to automatically select
-        const exactMatch = filtered.find(employee => {
-            const firstName = (employee.Fname || '').toLowerCase();
-            const lastName = (employee.Lname || '').toLowerCase();
-            const idNo = (employee.idno || '').toLowerCase();
-            const fullName = `${firstName} ${lastName}`.toLowerCase();
-            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
-            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
-            
-            return firstName === searchTermLower || 
-                   lastName === searchTermLower || 
-                   idNo === searchTermLower ||
-                   fullName === searchTermLower ||
-                   fullNameReversed === searchTermLower ||
-                   fullNameWithId === searchTermLower;
-        });
-        
-        // If exact match found, select that employee
-        if (exactMatch) {
-            onChange({...resignation, employee_id: exactMatch.id});
-        }
-        
-        setFilteredEmployees(filtered);
-    }, [employeeSearchTerm, employees, onChange, resignation]);
+   // Modify the useEffect hook in ResignationModal to fix the infinite loop
+useEffect(() => {
+    if (!Array.isArray(employees)) {
+        setFilteredEmployees([]);
+        return;
+    }
     
+    if (!employeeSearchTerm.trim()) {
+        setFilteredEmployees(employees);
+        return;
+    }
+    
+    const searchTermLower = employeeSearchTerm.toLowerCase();
+    const filtered = employees.filter(employee => {
+        const firstName = (employee.Fname || '').toLowerCase();
+        const lastName = (employee.Lname || '').toLowerCase();
+        const idNo = (employee.idno || '').toLowerCase();
+        const fullName = `${firstName} ${lastName}`.toLowerCase();
+        const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+        
+        return firstName.includes(searchTermLower) || 
+               lastName.includes(searchTermLower) || 
+               idNo.includes(searchTermLower) ||
+               fullName.includes(searchTermLower) ||
+               fullNameReversed.includes(searchTermLower);
+    });
+    
+    // Check for exact match to automatically select
+    const exactMatch = filtered.find(employee => {
+        const firstName = (employee.Fname || '').toLowerCase();
+        const lastName = (employee.Lname || '').toLowerCase();
+        const idNo = (employee.idno || '').toLowerCase();
+        const fullName = `${firstName} ${lastName}`.toLowerCase();
+        const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+        const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
+        
+        return firstName === searchTermLower || 
+               lastName === searchTermLower || 
+               idNo === searchTermLower ||
+               fullName === searchTermLower ||
+               fullNameReversed === searchTermLower ||
+               fullNameWithId === searchTermLower;
+    });
+    
+    // If exact match found, select that employee - BUT only if employee_id is empty
+    // This prevents the infinite loop by only updating when needed
+    if (exactMatch && !resignation.employee_id) {
+        onChange({...resignation, employee_id: exactMatch.id});
+    }
+    
+    setFilteredEmployees(filtered);
+}, [employeeSearchTerm, employees, onChange, resignation.employee_id]); // Only depend on employee_id, not the entire resignation object
     // Reset search term when modal opens
     useEffect(() => {
         if (isOpen) {

@@ -76,7 +76,7 @@ const WarningTypeBadge = ({ type }) => {
     );
 };
 
-// Warning Modal Component with Enhanced Employee Search
+// WarningModal Component with Enhanced Employee Search
 const WarningModal = ({ 
     isOpen, 
     onClose, 
@@ -93,7 +93,7 @@ const WarningModal = ({
     const [filteredEmployees, setFilteredEmployees] = useState([]);
     const [documentFile, setDocumentFile] = useState(null);
     
-    // Filter employees when search term or employees list changes
+    // First useEffect - Filter employees based on search term
     useEffect(() => {
         if (!Array.isArray(employees)) {
             setFilteredEmployees([]);
@@ -120,8 +120,19 @@ const WarningModal = ({
                    fullNameReversed.includes(searchTermLower);
         });
         
-        // Check for exact match to automatically select
-        const exactMatch = filtered.find(employee => {
+        setFilteredEmployees(filtered);
+    }, [employeeSearchTerm, employees]);
+    
+    // Second useEffect - Handle exact match selection separately
+    useEffect(() => {
+        if (!employeeSearchTerm.trim() || !Array.isArray(filteredEmployees) || filteredEmployees.length === 0) {
+            return;
+        }
+        
+        const searchTermLower = employeeSearchTerm.toLowerCase();
+        
+        // Check for exact match only when search term changes
+        const exactMatch = filteredEmployees.find(employee => {
             const firstName = (employee.Fname || '').toLowerCase();
             const lastName = (employee.Lname || '').toLowerCase();
             const idNo = (employee.idno || '').toLowerCase();
@@ -137,13 +148,11 @@ const WarningModal = ({
                    fullNameWithId === searchTermLower;
         });
         
-        // If exact match found, select that employee
-        if (exactMatch) {
+        // If exact match found and it's different from current selection, update it
+        if (exactMatch && exactMatch.id !== warning.employee_id) {
             onChange({...warning, employee_id: exactMatch.id});
         }
-        
-        setFilteredEmployees(filtered);
-    }, [employeeSearchTerm, employees, onChange, warning]);
+    }, [employeeSearchTerm, filteredEmployees, warning.employee_id, onChange]);
     
     // Reset search term when modal opens
     useEffect(() => {
@@ -183,6 +192,7 @@ const WarningModal = ({
         // Call the onSubmit handler with form data
         onSubmit(e, formData);
     };
+    
     
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="md">

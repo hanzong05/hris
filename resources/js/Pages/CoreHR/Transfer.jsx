@@ -83,7 +83,7 @@ const StatusBadge = ({ status }) => {
     }
 };
 
-// Transfer Modal Component
+// Transfer Modal Component with Enhanced Employee Search
 const TransferModal = ({ 
     isOpen, 
     onClose, 
@@ -100,6 +100,70 @@ const TransferModal = ({
     const isViewMode = mode === 'view';
     const hasLinesData = Array.isArray(lines) && lines.length > 0;
     
+    // State for employee search
+    const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+    const [filteredEmployees, setFilteredEmployees] = useState([]);
+    
+    // Filter employees when search term or employees list changes
+    useEffect(() => {
+        if (!Array.isArray(employees)) {
+            setFilteredEmployees([]);
+            return;
+        }
+        
+        if (!employeeSearchTerm.trim()) {
+            setFilteredEmployees(employees);
+            return;
+        }
+        
+        const searchTermLower = employeeSearchTerm.toLowerCase();
+        const filtered = employees.filter(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            
+            return firstName.includes(searchTermLower) || 
+                   lastName.includes(searchTermLower) || 
+                   idNo.includes(searchTermLower) ||
+                   fullName.includes(searchTermLower) ||
+                   fullNameReversed.includes(searchTermLower);
+        });
+        
+        // Check for exact match to automatically select
+        const exactMatch = filtered.find(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
+            
+            return firstName === searchTermLower || 
+                   lastName === searchTermLower || 
+                   idNo === searchTermLower ||
+                   fullName === searchTermLower ||
+                   fullNameReversed === searchTermLower ||
+                   fullNameWithId === searchTermLower;
+        });
+        
+        // If exact match found and different from current selection, update - prevents infinite loop
+        if (exactMatch && transfer.employee_id !== exactMatch.id) {
+            onChange({...transfer, employee_id: exactMatch.id});
+        }
+        
+        setFilteredEmployees(filtered);
+    }, [employeeSearchTerm, employees, onChange, transfer.employee_id]); // Only depend on transfer.employee_id
+    
+    // Reset search term when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setEmployeeSearchTerm('');
+            setFilteredEmployees(employees || []);
+        }
+    }, [isOpen, employees]);
+    
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="md">
             <div className="p-6">
@@ -114,23 +178,66 @@ const TransferModal = ({
                 </div>
                 
                 <form onSubmit={onSubmit} className="space-y-4">
-                    {/* Employee selection unchanged */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
-                        <select
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.employee_id ? 'border-red-500' : ''}`}
-                            value={transfer.employee_id || ''}
-                            onChange={(e) => onChange({...transfer, employee_id: e.target.value})}
-                            required
-                            disabled={isViewMode}
-                        >
-                            <option value="">Select Employee</option>
-                            {employees.map(employee => (
-                                <option key={employee.id} value={employee.id}>
-                                    {employee.Lname}, {employee.Fname} ({employee.idno})
-                                </option>
-                            ))}
-                        </select>
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-100">
+                                {transfer.employee ? `${transfer.employee.Lname || ''}, ${transfer.employee.Fname || ''} ${transfer.employee.idno ? `(${transfer.employee.idno})` : ''}` : 'Unknown Employee'}
+                            </div>
+                        ) : (
+                            <>
+                                {/* Employee Search Field - Only show in create/edit mode */}
+                                <div className="relative mb-2">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                        placeholder="Search employees by name or ID..."
+                                        value={employeeSearchTerm}
+                                        onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                                    />
+                                    {transfer.employee_id && filteredEmployees.length > 0 && filteredEmployees.find(e => e.id === transfer.employee_id) && (
+                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                            <CheckCircle className="h-4 w-4 text-green-500" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-xs text-gray-500 mb-2">
+                                    {filteredEmployees.length === 0 ? 
+                                        "No matching employees found" : 
+                                        filteredEmployees.length === 1 ? 
+                                            "1 employee found" : 
+                                            `${filteredEmployees.length} employees found`
+                                    }
+                                    {transfer.employee_id && filteredEmployees.find(e => e.id === transfer.employee_id) && 
+                                        " - Employee selected"
+                                    }
+                                </div>
+                                
+                                <select
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.employee_id ? 'border-red-500' : ''}`}
+                                    value={transfer.employee_id || ''}
+                                    onChange={(e) => onChange({...transfer, employee_id: e.target.value})}
+                                    required
+                                    disabled={isViewMode}
+                                >
+                                    <option value="">Select Employee</option>
+                                    {Array.isArray(filteredEmployees) && filteredEmployees.length > 0 ? (
+                                        filteredEmployees.map(employee => (
+                                            <option key={employee.id || `emp-${Math.random()}`} value={employee.id}>
+                                                {employee.Lname || ''}, {employee.Fname || ''} {employee.idno ? `(${employee.idno})` : ''}
+                                            </option>
+                                        ))
+                                    ) : employeeSearchTerm ? (
+                                        <option value="" disabled>No matching employees found</option>
+                                    ) : (
+                                        <option value="" disabled>No employees available</option>
+                                    )}
+                                </select>
+                            </>
+                        )}
                         {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
                     </div>
                     
@@ -240,10 +347,43 @@ const TransferModal = ({
                         {errorMessages.reason && <p className="mt-1 text-sm text-red-600">{errorMessages.reason}</p>}
                     </div>
                     
-                    {/* View mode additional fields unchanged */}
+                    {/* View mode additional fields */}
                     {isViewMode && (
                         <>
                             {/* Status and other view-mode fields */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <div className="mt-1">
+                                    <StatusBadge status={transfer.status} />
+                                </div>
+                            </div>
+                            
+                            {transfer.approved_by && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Approved By</label>
+                                    <div className="mt-1 text-sm text-gray-900">
+                                        {transfer.approver ? transfer.approver.name : 'Unknown User'}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {transfer.approved_at && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Approved At</label>
+                                    <div className="mt-1 text-sm text-gray-900">
+                                        {new Date(transfer.approved_at).toLocaleString()}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {transfer.remarks && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                                    <div className="mt-1 text-sm text-gray-900 whitespace-pre-line">
+                                        {transfer.remarks}
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
                     

@@ -11,15 +11,12 @@ import {
     Trash2,
     Save,
     X,
-    ArrowUp,
+    AlertTriangle,
     CheckCircle,
     XCircle,
     Clock,
     Check,
-    MapPin,
-    Car,
-    Calendar,
-    DollarSign,
+    FileText,
     User,
     Users
 } from 'lucide-react';
@@ -62,166 +59,188 @@ const Toast = ({ message, type, onClose }) => {
 
 // Status Badge Component
 const StatusBadge = ({ status }) => {
-    if (status === 'approved') {
+    if (status === 'resolved' || status === 'closed') {
         return (
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                 <CheckCircle className="w-3 h-3 mr-1" />
-                Approved
+                {status.charAt(0).toUpperCase() + status.slice(1)}
             </span>
         );
-    } else if (status === 'rejected') {
-        return (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                <XCircle className="w-3 h-3 mr-1" />
-                Rejected
-            </span>
-        );
-    } else if (status === 'completed') {
+    } else if (status === 'investigation') {
         return (
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                <Check className="w-3 h-3 mr-1" />
-                Completed
-            </span>
-        );
-    } else if (status === 'cancelled') {
-        return (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                <X className="w-3 h-3 mr-1" />
-                Cancelled
+                <Clock className="w-3 h-3 mr-1" />
+                Investigation
             </span>
         );
     } else {
         return (
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                <Clock className="w-3 h-3 mr-1" />
-                Pending
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                Open
             </span>
         );
     }
 };
 
-// Travel Order Modal Component
-const TravelOrderModal = ({ 
+const ComplaintModal = ({ 
     isOpen, 
     onClose, 
     title, 
-    travelOrder, 
-    employees = [],
-    departments = [],
-    onChange, 
+    complaint, 
+    employees,
+    users,
+    onChange,
+    onFileChange,
     onSubmit, 
     mode = 'create',
     errorMessages = {}
 }) => {
     const isViewMode = mode === 'view';
     const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+    const [complainantSearchTerm, setComplainantSearchTerm] = useState('');
     const [filteredEmployees, setFilteredEmployees] = useState([]);
-    const [selectedEmployees, setSelectedEmployees] = useState([]);
-    const [departmentFilter, setDepartmentFilter] = useState('');
+    const [filteredComplainants, setFilteredComplainants] = useState([]);
     
-    // Debug logging
+    // First useEffect - Filter employees for the accused employee
     useEffect(() => {
-        if (isOpen) {
-            console.log('Modal opened with employees:', employees?.length || 0);
-            console.log('Departments:', departments);
-            console.log('Current travel order:', travelOrder);
-        }
-    }, [isOpen, employees, departments, travelOrder]);
-    
-    // Initialize filtered employees when modal opens or employees/departments change
-    useEffect(() => {
-        if (isOpen) {
-            // Reset search and department filters
-            setEmployeeSearchTerm('');
-            setDepartmentFilter('');
-            
-            // Initialize employee selection from travel order
-            if (travelOrder && travelOrder.employee_ids) {
-                setSelectedEmployees(Array.isArray(travelOrder.employee_ids) ? 
-                    travelOrder.employee_ids : 
-                    []);
-            } else {
-                setSelectedEmployees([]);
-            }
-            
-            // Set filtered employees based on current filters (none at this point)
-            const emps = Array.isArray(employees) ? employees : [];
-            console.log(`Setting filtered employees: ${emps.length} items`);
-            setFilteredEmployees(emps);
-        }
-    }, [isOpen, employees, travelOrder]);
-    
-    // Filter employees based on search term and department
-    useEffect(() => {
-        // Ensure employees is an array
         if (!Array.isArray(employees)) {
-            console.warn('employees is not an array:', employees);
             setFilteredEmployees([]);
             return;
         }
         
-        let filtered = [...employees];
-        
-        // Apply department filter if selected
-        if (departmentFilter) {
-            filtered = filtered.filter(employee => employee.Department === departmentFilter);
+        if (!employeeSearchTerm.trim()) {
+            setFilteredEmployees(employees);
+            return;
         }
         
-        // Apply search filter if provided
-        if (employeeSearchTerm.trim()) {
-            const searchTermLower = employeeSearchTerm.toLowerCase();
-            filtered = filtered.filter(employee => {
-                const firstName = (employee.Fname || '').toLowerCase();
-                const lastName = (employee.Lname || '').toLowerCase();
-                const idNo = (employee.idno || '').toLowerCase();
-                const fullName = `${firstName} ${lastName}`.toLowerCase();
-                const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
-                
-                return firstName.includes(searchTermLower) || 
-                       lastName.includes(searchTermLower) || 
-                       idNo.includes(searchTermLower) ||
-                       fullName.includes(searchTermLower) ||
-                       fullNameReversed.includes(searchTermLower);
-            });
-        }
+        const searchTermLower = employeeSearchTerm.toLowerCase();
+        const filtered = employees.filter(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            
+            return firstName.includes(searchTermLower) || 
+                   lastName.includes(searchTermLower) || 
+                   idNo.includes(searchTermLower) ||
+                   fullName.includes(searchTermLower) ||
+                   fullNameReversed.includes(searchTermLower);
+        });
         
-        console.log(`Filtered employees: ${filtered.length} matches`);
         setFilteredEmployees(filtered);
-    }, [employeeSearchTerm, departmentFilter, employees]);
+    }, [employeeSearchTerm, employees]);
     
-    // Helper for transportation type display
-    const getTransportationTypeLabel = (value) => {
-        const types = {
-            'company_vehicle': 'Company Vehicle',
-            'personal_vehicle': 'Personal Vehicle',
-            'public_transport': 'Public Transport',
-            'plane': 'Plane',
-            'other': 'Other'
-        };
-        return types[value] || value;
-    };
-    
-    // Toggle employee selection
-    const toggleEmployeeSelection = (employeeId) => {
-        let newSelectedIds;
-        
-        if (selectedEmployees.includes(employeeId)) {
-            newSelectedIds = selectedEmployees.filter(id => id !== employeeId);
-        } else {
-            newSelectedIds = [...selectedEmployees, employeeId];
+    // Second useEffect - Handle exact match selection for the accused employee
+    useEffect(() => {
+        if (!employeeSearchTerm.trim() || !Array.isArray(filteredEmployees) || filteredEmployees.length === 0) {
+            return;
         }
         
-        setSelectedEmployees(newSelectedIds);
-        onChange({...travelOrder, employee_ids: newSelectedIds});
-    };
+        const searchTermLower = employeeSearchTerm.toLowerCase();
+        
+        // Check for exact match only when search term changes
+        const exactMatch = filteredEmployees.find(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
+            
+            return firstName === searchTermLower || 
+                   lastName === searchTermLower || 
+                   idNo === searchTermLower ||
+                   fullName === searchTermLower ||
+                   fullNameReversed === searchTermLower ||
+                   fullNameWithId === searchTermLower;
+        });
+        
+        // If exact match found and it's different from current selection, update it
+        if (exactMatch && exactMatch.id !== complaint.employee_id) {
+            onChange({...complaint, employee_id: exactMatch.id});
+        }
+    }, [employeeSearchTerm, filteredEmployees, complaint.employee_id, onChange]);
+    
+    // Third useEffect - Filter employees for the complainant
+    useEffect(() => {
+        if (!Array.isArray(employees)) {
+            setFilteredComplainants([]);
+            return;
+        }
+        
+        if (!complainantSearchTerm.trim()) {
+            setFilteredComplainants(employees);
+            return;
+        }
+        
+        const searchTermLower = complainantSearchTerm.toLowerCase();
+        const filtered = employees.filter(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            
+            return firstName.includes(searchTermLower) || 
+                   lastName.includes(searchTermLower) || 
+                   idNo.includes(searchTermLower) ||
+                   fullName.includes(searchTermLower) ||
+                   fullNameReversed.includes(searchTermLower);
+        });
+        
+        setFilteredComplainants(filtered);
+    }, [complainantSearchTerm, employees]);
+    
+    // Fourth useEffect - Handle exact match selection for the complainant
+    useEffect(() => {
+        if (!complainantSearchTerm.trim() || !Array.isArray(filteredComplainants) || filteredComplainants.length === 0) {
+            return;
+        }
+        
+        const searchTermLower = complainantSearchTerm.toLowerCase();
+        
+        // Check for exact match only when search term changes
+        const exactMatch = filteredComplainants.find(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
+            
+            return firstName === searchTermLower || 
+                   lastName === searchTermLower || 
+                   idNo === searchTermLower ||
+                   fullName === searchTermLower ||
+                   fullNameReversed === searchTermLower ||
+                   fullNameWithId === searchTermLower;
+        });
+        
+        // If exact match found and it's different from current selection, update it
+        if (exactMatch && exactMatch.id !== complaint.complainant_id) {
+            onChange({...complaint, complainant_id: exactMatch.id});
+        }
+    }, [complainantSearchTerm, filteredComplainants, complaint.complainant_id, onChange]);
+    
+    // Reset search terms when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setEmployeeSearchTerm('');
+            setComplainantSearchTerm('');
+            setFilteredEmployees(employees || []);
+            setFilteredComplainants(employees || []);
+        }
+    }, [isOpen, employees]);
     
     return (
-        <Modal show={isOpen} onClose={onClose} maxWidth="2xl">
+        <Modal show={isOpen} onClose={onClose} maxWidth="md">
             <div className="p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">{title}</h2>
                     <button 
-                        onClick={onClose}
+                        onClick={() => onClose(false)}
                         className="text-gray-400 hover:text-gray-500"
                     >
                         <X className="h-5 w-5" />
@@ -229,210 +248,258 @@ const TravelOrderModal = ({
                 </div>
                 
                 <form onSubmit={onSubmit} className="space-y-4">
-                    {/* Employee Selection Section */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee(s)</label>
-                        {isViewMode ? (
-                            <div className="p-2 border rounded bg-gray-50">
-                                {travelOrder.employee ? `${travelOrder.employee.Lname || ''}, ${travelOrder.employee.Fname || ''} ${travelOrder.employee.idno ? `(${travelOrder.employee.idno})` : ''}` : 'Unknown Employee'}
-                            </div>
-                        ) : (
-                            <>
-                                <div className="mb-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                    {/* Search Input */}
-                                    <div className="relative">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Employee (Against)</label>
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {complaint.employee ? `${complaint.employee.Lname || ''}, ${complaint.employee.Fname || ''} ${complaint.employee.idno ? `(${complaint.employee.idno})` : ''}` : 'Unknown Employee'}
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Employee Search Field */}
+                                    <div className="relative mb-2">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <Search className="h-4 w-4 text-gray-400" />
                                         </div>
                                         <input
                                             type="text"
                                             className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                            placeholder="Search employees by name or ID..."
+                                            placeholder="Search employee by name or ID..."
                                             value={employeeSearchTerm}
                                             onChange={(e) => setEmployeeSearchTerm(e.target.value)}
                                         />
+                                        {complaint.employee_id && filteredEmployees.length > 0 && filteredEmployees.find(e => e.id === complaint.employee_id) && (
+                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mb-2">
+                                        {filteredEmployees.length === 0 ? 
+                                            "No matching employees found" : 
+                                            filteredEmployees.length === 1 ? 
+                                                "1 employee found" : 
+                                                `${filteredEmployees.length} employees found`
+                                        }
+                                        {complaint.employee_id && filteredEmployees.find(e => e.id === complaint.employee_id) && 
+                                            " - Employee selected"
+                                        }
                                     </div>
                                     
-                                    {/* Department Filter */}
-                                    <div>
-                                        <select
-                                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                            value={departmentFilter}
-                                            onChange={(e) => setDepartmentFilter(e.target.value)}
-                                        >
-                                            <option value="">All Departments</option>
-                                            {Array.isArray(departments) && departments.map((dept, index) => (
-                                                <option key={`dept-${dept.id || index}`} value={dept.name || dept}>
-                                                    {dept.name || dept}
+                                    <select
+                                        className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.employee_id ? 'border-red-500' : ''}`}
+                                        value={complaint.employee_id || ''}
+                                        onChange={(e) => onChange({...complaint, employee_id: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Employee</option>
+                                        {Array.isArray(filteredEmployees) && filteredEmployees.length > 0 ? (
+                                            filteredEmployees.map(employee => (
+                                                <option key={employee.id || `emp-${Math.random()}`} value={employee.id}>
+                                                    {employee.Lname || ''}, {employee.Fname || ''} {employee.idno ? `(${employee.idno})` : ''}
                                                 </option>
-                                            ))}
-                                        </select>
+                                            ))
+                                        ) : employeeSearchTerm ? (
+                                            <option value="" disabled>No matching employees found</option>
+                                        ) : (
+                                            <option value="" disabled>No employees available</option>
+                                        )}
+                                    </select>
+                                </>
+                            )}
+                            {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Complainant (Filed By)</label>
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {complaint.complainant ? `${complaint.complainant.Lname || ''}, ${complaint.complainant.Fname || ''} ${complaint.complainant.idno ? `(${complaint.complainant.idno})` : ''}` : 'Unknown Employee'}
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Complainant Search Field */}
+                                    <div className="relative mb-2">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Search className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                            placeholder="Search complainant by name or ID..."
+                                            value={complainantSearchTerm}
+                                            onChange={(e) => setComplainantSearchTerm(e.target.value)}
+                                        />
+                                        {complaint.complainant_id && filteredComplainants.length > 0 && filteredComplainants.find(e => e.id === complaint.complainant_id) && (
+                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mb-2">
+                                        {filteredComplainants.length === 0 ? 
+                                            "No matching employees found" : 
+                                            filteredComplainants.length === 1 ? 
+                                                "1 employee found" : 
+                                                `${filteredComplainants.length} employees found`
+                                        }
+                                        {complaint.complainant_id && filteredComplainants.find(e => e.id === complaint.complainant_id) && 
+                                            " - Complainant selected"
+                                        }
+                                    </div>
+                                    
+                                    <select
+                                        className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.complainant_id ? 'border-red-500' : ''}`}
+                                        value={complaint.complainant_id || ''}
+                                        onChange={(e) => onChange({...complaint, complainant_id: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Complainant</option>
+                                        {Array.isArray(filteredComplainants) && filteredComplainants.length > 0 ? (
+                                            filteredComplainants.map(employee => (
+                                                <option key={employee.id || `emp-${Math.random()}`} value={employee.id}>
+                                                    {employee.Lname || ''}, {employee.Fname || ''} {employee.idno ? `(${employee.idno})` : ''}
+                                                </option>
+                                            ))
+                                        ) : complainantSearchTerm ? (
+                                            <option value="" disabled>No matching employees found</option>
+                                        ) : (
+                                            <option value="" disabled>No employees available</option>
+                                        )}
+                                    </select>
+                                </>
+                            )}
+                            {errorMessages.complainant_id && <p className="mt-1 text-sm text-red-600">{errorMessages.complainant_id}</p>}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Title</label>
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50">
+                                {complaint.complaint_title || ''}
+                            </div>
+                        ) : (
+                            <input
+                                type="text"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.complaint_title ? 'border-red-500' : ''}`}
+                                value={complaint.complaint_title || ''}
+                                onChange={(e) => onChange({...complaint, complaint_title: e.target.value})}
+                                placeholder="e.g. Unprofessional Behavior"
+                                required
+                            />
+                        )}
+                        {errorMessages.complaint_title && <p className="mt-1 text-sm text-red-600">{errorMessages.complaint_title}</p>}
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Description</label>
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50 whitespace-pre-line min-h-[100px]">
+                                {complaint.complaint_description || ''}
+                            </div>
+                        ) : (
+                            <textarea
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.complaint_description ? 'border-red-500' : ''}`}
+                                value={complaint.complaint_description || ''}
+                                onChange={(e) => onChange({...complaint, complaint_description: e.target.value})}
+                                placeholder="Detailed description of the complaint..."
+                                rows="4"
+                                required
+                            />
+                        )}
+                        {errorMessages.complaint_description && <p className="mt-1 text-sm text-red-600">{errorMessages.complaint_description}</p>}
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Date</label>
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50">
+                                {complaint.complaint_date ? new Date(complaint.complaint_date).toLocaleDateString() : ''}
+                            </div>
+                        ) : (
+                            <input
+                                type="date"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.complaint_date ? 'border-red-500' : ''}`}
+                                value={complaint.complaint_date || ''}
+                                onChange={(e) => onChange({...complaint, complaint_date: e.target.value})}
+                                required
+                            />
+                        )}
+                        {errorMessages.complaint_date && <p className="mt-1 text-sm text-red-600">{errorMessages.complaint_date}</p>}
+                    </div>
+                    
+                    {!isViewMode && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Supporting Document</label>
+                            <input
+                                type="file"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.document ? 'border-red-500' : ''}`}
+                                onChange={(e) => onFileChange(e.target.files[0])}
+                            />
+                            <p className="mt-1 text-xs text-gray-500">Upload supporting documents (PDF, DOC, JPG, PNG)</p>
+                            {errorMessages.document && <p className="mt-1 text-sm text-red-600">{errorMessages.document}</p>}
+                        </div>
+                    )}
+                    
+                    {isViewMode && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <div className="mt-1">
+                                    <StatusBadge status={complaint.status} />
+                                </div>
+                            </div>
+                            
+                            {complaint.assigned_to && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+                                    <div className="mt-1 text-sm text-gray-900">
+                                        {complaint.assignedTo ? complaint.assignedTo.name : 'Not Assigned'}
                                     </div>
                                 </div>
-                                
-                                <div className="text-xs text-gray-500 mb-2">
-                                    {filteredEmployees.length === 0 ? 
-                                        "No matching employees found" : 
-                                        filteredEmployees.length === 1 ? 
-                                            "1 employee found" : 
-                                            `${filteredEmployees.length} employees found`
-                                    }
-                                    {selectedEmployees.length > 0 && 
-                                        ` - ${selectedEmployees.length} employee${selectedEmployees.length > 1 ? 's' : ''} selected`
-                                    }
+                            )}
+                            
+                            {complaint.document_path && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Supporting Document</label>
+                                    <a 
+                                        href={`/storage/${complaint.document_path}`}
+                                        target="_blank"
+                                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                    >
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        View Document
+                                    </a>
                                 </div>
-                                
-                                {/* Employee List */}
-                                <div className="max-h-40 overflow-y-auto border rounded-md">
-                                    {filteredEmployees.length > 0 ? (
-                                        <div className="divide-y divide-gray-200">
-                                            {filteredEmployees.map(employee => (
-                                                <div 
-                                                    key={employee.id} 
-                                                    className="flex items-center p-2 hover:bg-gray-50 cursor-pointer"
-                                                    onClick={() => toggleEmployeeSelection(employee.id)}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                                        checked={selectedEmployees.includes(employee.id)}
-                                                        onChange={() => {}}
-                                                    />
-                                                    <div className="ml-3">
-                                                        <div className="text-sm font-medium text-gray-900">
-                                                            {employee.Lname}, {employee.Fname} {employee.MName || ''}
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 flex space-x-2">
-                                                            <span>{employee.idno || 'No ID'}</span>
-                                                            <span>•</span>
-                                                            <span>{employee.Department || 'No Dept'}</span>
-                                                            <span>•</span>
-                                                            <span>{employee.Jobtitle || 'No Title'}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="p-3 text-center text-gray-500 text-sm">
-                                            No employees found matching your criteria
-                                        </div>
-                                    )}
+                            )}
+                            
+                            {complaint.resolution && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Resolution</label>
+                                    <div className="mt-1 text-sm text-gray-900 whitespace-pre-line p-2 border rounded bg-gray-50">
+                                        {complaint.resolution}
+                                    </div>
                                 </div>
-                                
-                                {errorMessages.employee_ids && (
-                                    <p className="mt-1 text-sm text-red-600">{errorMessages.employee_ids}</p>
-                                )}
-                            </>
-                        )}
-                    </div>
+                            )}
+                            
+                            {complaint.resolution_date && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Resolution Date</label>
+                                    <div className="mt-1 text-sm text-gray-900">
+                                        {new Date(complaint.resolution_date).toLocaleDateString()}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
                     
-                    {/* Form Date & Travel Dates */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Form Date</label>
-                            {isViewMode ? (
-                                <div className="p-2 border rounded bg-gray-50">
-                                    {travelOrder.date ? new Date(travelOrder.date).toLocaleDateString() : ''}
-                                </div>
-                            ) : (
-                                <input
-                                    type="date"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.date ? 'border-red-500' : ''}`}
-                                    value={travelOrder.date || ''}
-                                    onChange={(e) => onChange({...travelOrder, date: e.target.value})}
-                                    required
-                                />
-                            )}
-                            {errorMessages.date && <p className="mt-1 text-sm text-red-600">{errorMessages.date}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                            {isViewMode ? (
-                                <div className="p-2 border rounded bg-gray-50">
-                                    {travelOrder.start_date ? new Date(travelOrder.start_date).toLocaleDateString() : ''}
-                                </div>
-                            ) : (
-                                <input
-                                    type="date"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.start_date ? 'border-red-500' : ''}`}
-                                    value={travelOrder.start_date || ''}
-                                    onChange={(e) => onChange({...travelOrder, start_date: e.target.value})}
-                                    required
-                                />
-                            )}
-                            {errorMessages.start_date && <p className="mt-1 text-sm text-red-600">{errorMessages.start_date}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                            {isViewMode ? (
-                                <div className="p-2 border rounded bg-gray-50">
-                                    {travelOrder.end_date ? new Date(travelOrder.end_date).toLocaleDateString() : ''}
-                                </div>
-                            ) : (
-                                <input
-                                    type="date"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.end_date ? 'border-red-500' : ''}`}
-                                    value={travelOrder.end_date || ''}
-                                    onChange={(e) => onChange({...travelOrder, end_date: e.target.value})}
-                                    required
-                                />
-                            )}
-                            {errorMessages.end_date && <p className="mt-1 text-sm text-red-600">{errorMessages.end_date}</p>}
-                        </div>
-                    </div>
-                    
-                    {/* Destination & Transportation */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
-                            {isViewMode ? (
-                                <div className="p-2 border rounded bg-gray-50">
-                                    {travelOrder.destination || ''}
-                                </div>
-                            ) : (
-                                <input
-                                    type="text"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.destination ? 'border-red-500' : ''}`}
-                                    value={travelOrder.destination || ''}
-                                    onChange={(e) => onChange({...travelOrder, destination: e.target.value})}
-                                    placeholder="e.g. Manila, Philippines"
-                                    required
-                                />
-                            )}
-                            {errorMessages.destination && <p className="mt-1 text-sm text-red-600">{errorMessages.destination}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Transportation Type</label>
-                            {isViewMode ? (
-                                <div className="p-2 border rounded bg-gray-50">
-                                    {getTransportationTypeLabel(travelOrder.transportation_type) || ''}
-                                </div>
-                            ) : (
-                                <select
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.transportation_type ? 'border-red-500' : ''}`}
-                                    value={travelOrder.transportation_type || ''}
-                                    onChange={(e) => onChange({...travelOrder, transportation_type: e.target.value})}
-                                    required
-                                >
-                                    <option value="">Select Transportation</option>
-                                    <option value="company_vehicle">Company Vehicle</option>
-                                    <option value="personal_vehicle">Personal Vehicle</option>
-                                    <option value="public_transport">Public Transport</option>
-                                    <option value="plane">Plane</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            )}
-                            {errorMessages.transportation_type && <p className="mt-1 text-sm text-red-600">{errorMessages.transportation_type}</p>}
-                        </div>
-                    </div>
-                    
-                    {/* Submit Button */}
                     <div className="flex justify-end mt-6">
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={onClose}
+                            onClick={() => onClose(false)}
                             className="mr-2"
                         >
                             {isViewMode ? 'Close' : 'Cancel'}
@@ -444,7 +511,7 @@ const TravelOrderModal = ({
                                 className="bg-blue-600 text-white hover:bg-blue-700"
                             >
                                 <Save className="w-4 h-4 mr-2" />
-                                {mode === 'create' ? 'Create Travel Order' : 'Update Travel Order'}
+                                {mode === 'create' ? 'Save Complaint' : 'Update Complaint'}
                             </Button>
                         )}
                     </div>
@@ -453,100 +520,43 @@ const TravelOrderModal = ({
         </Modal>
     );
 };
-
 // Status Update Modal Component
 const StatusUpdateModal = ({ 
     isOpen, 
     onClose, 
-    travelOrder, 
+    complaint, 
+    users,
     onSubmit
 }) => {
-    const [status, setStatus] = useState('approved');
-    const [remarks, setRemarks] = useState('');
+    const [status, setStatus] = useState(complaint?.status || 'open');
+    const [assignedTo, setAssignedTo] = useState(complaint?.assigned_to || '');
+    const [resolution, setResolution] = useState(complaint?.resolution || '');
+    const [resolutionDate, setResolutionDate] = useState(complaint?.resolution_date || '');
     
     useEffect(() => {
         if (isOpen) {
-            if (travelOrder && travelOrder.status === 'approved') {
-                setStatus('completed');
-                setRemarks('');
-            } else {
-                setStatus('approved');
-                setRemarks('');
-            }
+            setStatus(complaint?.status || 'open');
+            setAssignedTo(complaint?.assigned_to || '');
+            setResolution(complaint?.resolution || '');
+            setResolutionDate(complaint?.resolution_date || '');
         }
-    }, [isOpen, travelOrder]);
+    }, [isOpen, complaint]);
     
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSubmit({ status, remarks });
-    };
-    
-    // Display different options based on current status
-    const renderStatusOptions = () => {
-        if (travelOrder && travelOrder.status === 'approved') {
-            return (
-                <div className="flex space-x-4">
-                    <label className="inline-flex items-center">
-                        <input
-                            type="radio"
-                            name="status"
-                            value="completed"
-                            checked={status === 'completed'}
-                            onChange={() => setStatus('completed')}
-                            className="form-radio h-4 w-4 text-green-600"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">Mark as Completed</span>
-                    </label>
-                    <label className="inline-flex items-center">
-                        <input
-                            type="radio"
-                            name="status"
-                            value="cancelled"
-                            checked={status === 'cancelled'}
-                            onChange={() => setStatus('cancelled')}
-                            className="form-radio h-4 w-4 text-red-600"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">Cancel</span>
-                    </label>
-                </div>
-            );
-        } else {
-            return (
-                <div className="flex space-x-4">
-                    <label className="inline-flex items-center">
-                        <input
-                            type="radio"
-                            name="status"
-                            value="approved"
-                            checked={status === 'approved'}
-                            onChange={() => setStatus('approved')}
-                            className="form-radio h-4 w-4 text-green-600"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">Approve</span>
-                    </label>
-                    <label className="inline-flex items-center">
-                        <input
-                            type="radio"
-                            name="status"
-                            value="rejected"
-                            checked={status === 'rejected'}
-                            onChange={() => setStatus('rejected')}
-                            className="form-radio h-4 w-4 text-red-600"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">Reject</span>
-                    </label>
-                </div>
-            );
-        }
+        onSubmit({
+            status,
+            assigned_to: assignedTo,
+            resolution: status === 'resolved' || status === 'closed' ? resolution : '',
+            resolution_date: status === 'resolved' || status === 'closed' ? resolutionDate : null
+        });
     };
     
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="md">
             <div className="p-6">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">
-                        {travelOrder && travelOrder.status === 'approved' ? 'Update Travel Order Status' : 'Review Travel Order Request'}
-                    </h2>
+                    <h2 className="text-lg font-semibold">Update Complaint Status</h2>
                     <button 
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-500"
@@ -557,20 +567,82 @@ const StatusUpdateModal = ({
                 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Status Decision</label>
-                        {renderStatusOptions()}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Title</label>
+                        <div className="p-2 border rounded bg-gray-50">
+                            {complaint?.complaint_title}
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+                            <div className="p-2 border rounded bg-gray-50">
+                                {complaint?.employee?.Fname} {complaint?.employee?.Lname}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Complainant</label>
+                            <div className="p-2 border rounded bg-gray-50">
+                                {complaint?.complainant?.Fname} {complaint?.complainant?.Lname}
+                            </div>
+                        </div>
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                        <textarea
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select
                             className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            value={remarks}
-                            onChange={(e) => setRemarks(e.target.value)}
-                            placeholder="Add your comments or reasons for the decision"
-                            rows="3"
-                        />
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value)}
+                            required
+                        >
+                            <option value="open">Open</option>
+                            <option value="investigation">Under Investigation</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="closed">Closed</option>
+                        </select>
                     </div>
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+                        <select
+                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            value={assignedTo}
+                            onChange={(e) => setAssignedTo(e.target.value)}
+                        >
+                            <option value="">Not Assigned</option>
+                            {users.map(user => (
+                                <option key={user.id} value={user.id}>{user.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    
+                    {(status === 'resolved' || status === 'closed') && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Resolution</label>
+                                <textarea
+                                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    value={resolution}
+                                    onChange={(e) => setResolution(e.target.value)}
+                                    placeholder="Describe how the complaint was resolved..."
+                                    rows="3"
+                                    required={status === 'resolved' || status === 'closed'}
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Resolution Date</label>
+                                <input
+                                    type="date"
+                                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    value={resolutionDate}
+                                    onChange={(e) => setResolutionDate(e.target.value)}
+                                    required={status === 'resolved' || status === 'closed'}
+                                />
+                            </div>
+                        </>
+                    )}
                     
                     <div className="flex justify-end mt-6">
                         <Button
@@ -584,36 +656,10 @@ const StatusUpdateModal = ({
                         
                         <Button
                             type="submit"
-                            className={
-                                status === 'approved' ? "bg-green-600 text-white hover:bg-green-700" : 
-                                status === 'completed' ? "bg-blue-600 text-white hover:bg-blue-700" :
-                                "bg-red-600 text-white hover:bg-red-700"
-                            }
+                            className="bg-blue-600 text-white hover:bg-blue-700"
                         >
-                            {status === 'approved' && (
-                                <>
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Approve Travel Order
-                                </>
-                            )}
-                            {status === 'rejected' && (
-                                <>
-                                    <XCircle className="w-4 h-4 mr-2" />
-                                    Reject Travel Order
-                                </>
-                            )}
-                            {status === 'completed' && (
-                                <>
-                                    <Check className="w-4 h-4 mr-2" />
-                                    Mark as Completed
-                                </>
-                            )}
-                            {status === 'cancelled' && (
-                                <>
-                                    <X className="w-4 h-4 mr-2" />
-                                    Cancel Travel Order
-                                </>
-                            )}
+                            <Save className="w-4 h-4 mr-2" />
+                            Update Status
                         </Button>
                     </div>
                 </form>
@@ -622,15 +668,15 @@ const StatusUpdateModal = ({
     );
 };
 
-// Main Travel Component
-const Travel = () => {
-    // Safely get data from page props with better defensive checks and defaults
-    const { auth, travelOrders = [], employees = [], departments = [] } = usePage().props;
+// Main Complaints Component
+const Complaints = () => {
+    // Safely get user from page props
+    const { auth } = usePage().props;
     const user = auth?.user || {};
     
-    const [allTravelOrders, setAllTravelOrders] = useState(travelOrders);
-    const [allEmployees, setAllEmployees] = useState(employees);
-    const [allDepartments, setAllDepartments] = useState(departments);
+    const [complaints, setComplaints] = useState([]);
+    const [employees, setEmployees] = useState([]);
+    const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -639,27 +685,24 @@ const Travel = () => {
     // Toast state
     const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     
-    // Travel order state
-    const emptyTravelOrder = {
-        employee_ids: [],
-        date: new Date().toISOString().split('T')[0],
-        start_date: '',
-        end_date: '',
-        destination: '',
-        transportation_type: '',
-        purpose: '',
-        accommodation_required: false,
-        meal_allowance: false,
-        other_expenses: '',
-        estimated_cost: ''
+    // Complaint state
+    const emptyComplaint = {
+        employee_id: '',
+        complainant_id: '',
+        complaint_title: '',
+        complaint_description: '',
+        complaint_date: '',
+        document_path: null
     };
-    const [currentTravelOrder, setCurrentTravelOrder] = useState(emptyTravelOrder);
+    const [currentComplaint, setCurrentComplaint] = useState(emptyComplaint);
+    const [complaintFile, setComplaintFile] = useState(null);
     
     // Error state
     const [errors, setErrors] = useState({});
     
     // Modal states
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     
@@ -673,90 +716,60 @@ const Travel = () => {
         onConfirm: () => {}
     });
 
-    // Add an initialization effect to ensure we have employee data
-    useEffect(() => {
-        const initializeData = async () => {
-            if (!allEmployees || allEmployees.length === 0) {
-                try {
-                    setLoading(true);
-                    console.log('Initializing employee data...');
-                    const response = await axios.get('/employees/list');
-                    console.log(`Loaded ${response.data.data?.length || 0} employees`);
-                    setAllEmployees(response.data.data || []);
-                } catch (error) {
-                    console.error('Failed to load employees:', error);
-                } finally {
-                    setLoading(false);
-                }
-            }
-        };
-        
-        initializeData();
-    }, []);
-
     // Load data
-    const loadData = useCallback(async () => {
-        setLoading(true);
+    // Load data with better error handling
+const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+        // First try to get complaints data
+        let complaintsData = [];
+        let employeesData = [];
+        let usersData = [];
+        
         try {
-            // Load travel orders with applied filters
-            const travelOrdersResponse = await axios.get('/travel-orders', {
+            const complaintsResponse = await axios.get('/complaints/list', {
                 params: {
                     search: searchTerm,
                     status: statusFilter !== 'all' ? statusFilter : null,
-                    from_date: dateFilter.from || null,
-                    to_date: dateFilter.to || null
+                    date_from: dateFilter.from || null,
+                    date_to: dateFilter.to || null
                 }
             });
-            
-            setAllTravelOrders(travelOrdersResponse.data.travelOrders || []);
-            
-            // Check if we need to load employee data
-            if (!allEmployees || allEmployees.length === 0) {
-                try {
-                    const employeesResponse = await axios.get('/employees/list');
-                    setAllEmployees(employeesResponse.data.data || []);
-                    console.log(`Loaded ${employeesResponse.data.data?.length || 0} employees in loadData`);
-                } catch (employeeError) {
-                    console.error('Error loading employees:', employeeError);
-                }
-            }
-            
-            // Check if we need to load department data
-            if (!allDepartments || allDepartments.length === 0) {
-                try {
-                    // Use the correct endpoint: /departments instead of /departments/list
-                    const departmentsResponse = await axios.get('/departments');
-                    if (departmentsResponse.data.data && Array.isArray(departmentsResponse.data.data)) {
-                        // Extract just the names or use the full objects depending on your needs
-                        setAllDepartments(departmentsResponse.data.data);
-                        console.log(`Loaded ${departmentsResponse.data.data.length} departments`);
-                    } else {
-                        setAllDepartments([]);
-                    }
-                } catch (departmentError) {
-                    console.error('Error loading departments:', departmentError);
-                    // Fallback: Extract departments from employee data if available
-                    if (allEmployees && allEmployees.length > 0) {
-                        console.log('Extracting departments from employee data as fallback');
-                        const uniqueDepartments = [...new Set(
-                            allEmployees
-                                .map(e => e.Department)
-                                .filter(Boolean)
-                        )];
-                        console.log(`Extracted ${uniqueDepartments.length} unique departments from employee data`);
-                        setAllDepartments(uniqueDepartments);
-                    } else {
-                        setAllDepartments([]);
-                    }
-                }
-            }
+            complaintsData = complaintsResponse.data.data || [];
         } catch (error) {
-            console.error('Error loading travel orders:', error);
-            showToast('Error loading travel orders: ' + (error.response?.data?.message || error.message), 'error');
-        } finally {
-            setLoading(false);
+            console.error('Error loading complaints:', error);
+            showToast('Error loading complaints: ' + (error.response?.data?.message || error.message), 'error');
         }
-    }, [searchTerm, statusFilter, dateFilter, allEmployees, allDepartments]);
+
+        try {
+            const employeesResponse = await axios.get('/employees/list', { params: { active_only: true } });
+            employeesData = employeesResponse.data.data || [];
+        } catch (error) {
+            console.error('Error loading employees:', error);
+            showToast('Error loading employees: ' + (error.response?.data?.message || error.message), 'error');
+        }
+
+        try {
+            const usersResponse = await axios.get('/users/list');
+            usersData = usersResponse.data.data || [];
+        } catch (error) {
+            console.error('Error loading users:', error);
+            // For user data, we'll provide an empty array instead of showing a toast
+            // as this seems to be a non-critical data component
+            console.warn('Users data not available. Some features may be limited.');
+            usersData = [];
+        }
+        
+        setComplaints(complaintsData);
+        setEmployees(employeesData);
+        setUsers(usersData);
+    } catch (error) {
+        console.error('Error in loadData:', error);
+        showToast('Error loading data: ' + (error.response?.data?.message || error.message), 'error');
+    } finally {
+        setLoading(false);
+    }
+}, [searchTerm, statusFilter, dateFilter]);
 
     // Load data on component mount and when filters change
     useEffect(() => {
@@ -778,134 +791,183 @@ const Travel = () => {
         setSearchTerm(value);
     }, 300);
 
-    // Handle creating new travel order
+    // Handle creating new complaint
     const handleCreateClick = () => {
-        setCurrentTravelOrder(emptyTravelOrder);
+        setCurrentComplaint(emptyComplaint);
+        setComplaintFile(null);
         setErrors({});
         setIsCreateModalOpen(true);
     };
 
-    // Handle viewing travel order
-    const handleViewClick = (travelOrder) => {
-        setCurrentTravelOrder({...travelOrder});
+    // Handle editing complaint
+    const handleEditClick = (complaint) => {
+        setCurrentComplaint({...complaint});
+        setComplaintFile(null);
+        setErrors({});
+        setIsEditModalOpen(true);
+    };
+
+    // Handle viewing complaint
+    const handleViewClick = (complaint) => {
+        setCurrentComplaint({...complaint});
         setIsViewModalOpen(true);
     };
 
-    // Handle status update
-    const handleStatusClick = (travelOrder) => {
-        setCurrentTravelOrder({...travelOrder});
+    // Handle updating complaint status
+    const handleStatusClick = (complaint) => {
+        setCurrentComplaint({...complaint});
         setIsStatusModalOpen(true);
     };
 
-    // Handle creating new travel order
+    // Handle file change
+    const handleFileChange = (file) => {
+        setComplaintFile(file);
+    };
+
+    // Handle creating new complaint
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
         setErrors({});
         
+        const formData = new FormData();
+        
+        // Append complaint data to form data
+        for (const key in currentComplaint) {
+            if (currentComplaint[key] !== null && currentComplaint[key] !== undefined) {
+                formData.append(key, currentComplaint[key]);
+            }
+        }
+        
+        // Append file if selected
+        if (complaintFile) {
+            formData.append('document', complaintFile);
+        }
+        
         try {
-            const response = await axios.post('/travel-orders', currentTravelOrder);
+            const response = await axios.post('/complaints', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
             
-            // Update travel orders list
+            // Update complaints list
             await loadData();
             
             // Reset form and close modal
-            setCurrentTravelOrder(emptyTravelOrder);
+            setCurrentComplaint(emptyComplaint);
+            setComplaintFile(null);
             setIsCreateModalOpen(false);
             
-            showToast(response.data.message || 'Travel order created successfully');
+            showToast('Complaint created successfully');
         } catch (error) {
-            console.error('Error creating travel order:', error);
+            console.error('Error creating complaint:', error);
             
             // Handle validation errors
             if (error.response?.status === 422 && error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
             } else {
-                showToast(error.response?.data?.message || 'Error creating travel order', 'error');
+                showToast(error.response?.data?.message || 'Error creating complaint', 'error');
             }
         }
     };
 
-    // Handle status update
+    // Handle updating complaint
+    const handleUpdateSubmit = async (e) => {
+        e.preventDefault();
+        setErrors({});
+        
+        const formData = new FormData();
+        
+        // Append complaint data to form data
+        for (const key in currentComplaint) {
+            if (currentComplaint[key] !== null && currentComplaint[key] !== undefined) {
+                formData.append(key, currentComplaint[key]);
+            }
+        }
+        
+        // Append file if selected
+        if (complaintFile) {
+            formData.append('document', complaintFile);
+        }
+        
+        // Use PUT method with FormData
+        formData.append('_method', 'PUT');
+        
+        try {
+            const response = await axios.post(`/complaints/${currentComplaint.id}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            
+            // Update complaints list
+            await loadData();
+            
+            // Reset form and close modal
+            setCurrentComplaint(emptyComplaint);
+            setComplaintFile(null);
+            setIsEditModalOpen(false);
+            
+            showToast('Complaint updated successfully');
+        } catch (error) {
+            console.error('Error updating complaint:', error);
+            
+            // Handle validation errors
+            if (error.response?.status === 422 && error.response?.data?.errors) {
+                setErrors(error.response.data.errors);
+            } else {
+                showToast(error.response?.data?.message || 'Error updating complaint', 'error');
+            }
+        }
+    };
+
+    // Handle updating complaint status
     const handleStatusSubmit = async (data) => {
         try {
-            const response = await axios.post(`/travel-orders/${currentTravelOrder.id}/status`, data);
+            const response = await axios.post(`/complaints/${currentComplaint.id}/status`, data);
             
-            // Update travel orders list
+            // Update complaints list
             await loadData();
             
             // Close modal
             setIsStatusModalOpen(false);
             
-            showToast(response.data.message || `Travel order status updated successfully`);
+            showToast('Complaint status updated successfully');
         } catch (error) {
-            console.error('Error updating travel order status:', error);
-            showToast(error.response?.data?.message || 'Error updating travel order status', 'error');
+            console.error('Error updating complaint status:', error);
+            showToast(error.response?.data?.message || 'Error updating complaint status', 'error');
         }
     };
 
-    // Handle deleting travel order
-    const handleDeleteClick = (travelOrder) => {
+    // Handle deleting complaint
+    const handleDeleteClick = (complaint) => {
         setConfirmModal({
             isOpen: true,
-            title: 'Delete Travel Order',
-            message: `Are you sure you want to delete this travel order? This action cannot be undone.`,
+            title: 'Delete Complaint',
+            message: `Are you sure you want to delete this complaint "${complaint.complaint_title}"? This action cannot be undone.`,
             confirmText: 'Delete',
             confirmVariant: 'destructive',
             onConfirm: async () => {
                 try {
-                    const response = await axios.delete(`/travel-orders/${travelOrder.id}`);
+                    await axios.delete(`/complaints/${complaint.id}`);
                     
-                    // Update travel orders list
+                    // Update complaints list
                     await loadData();
                     
                     setConfirmModal({ ...confirmModal, isOpen: false });
-                    showToast(response.data.message || 'Travel order deleted successfully');
+                    showToast('Complaint deleted successfully');
                 } catch (error) {
-                    console.error('Error deleting travel order:', error);
+                    console.error('Error deleting complaint:', error);
                     setConfirmModal({ ...confirmModal, isOpen: false });
-                    showToast(error.response?.data?.message || 'Error deleting travel order', 'error');
+                    showToast(error.response?.data?.message || 'Error deleting complaint', 'error');
                 }
             }
         });
     };
 
-    // Handle export to Excel
-    const handleExport = async () => {
-        try {
-            // Create the export URL with current filters
-            const params = new URLSearchParams({
-                search: searchTerm || '',
-                status: statusFilter !== 'all' ? statusFilter : '',
-                from_date: dateFilter.from || '',
-                to_date: dateFilter.to || ''
-            });
-            
-            // Create a URL for the export endpoint with the filters
-            const exportUrl = `/travel-orders/export?${params.toString()}`;
-            
-            // Open the URL in a new window or trigger a download
-            window.open(exportUrl, '_blank');
-        } catch (error) {
-            console.error('Error exporting travel orders:', error);
-            showToast('Error exporting travel orders: ' + error.message, 'error');
-        }
-    };
-
-    // Helper to get transportation type display value
-    const getTransportationTypeDisplay = (type) => {
-        const types = {
-            'company_vehicle': 'Company Vehicle',
-            'personal_vehicle': 'Personal Vehicle',
-            'public_transport': 'Public Transport',
-            'plane': 'Plane',
-            'other': 'Other'
-        };
-        return types[type] || type;
-    };
-
     return (
         <AuthenticatedLayout>
-            <Head title="Travel Orders" />
+            <Head title="Complaints Management" />
             <div className="flex min-h-screen bg-gray-50/50">
                 <Sidebar />
                 <div className="flex-1 p-8">
@@ -920,48 +982,38 @@ const Travel = () => {
                         )}
 
                         {/* Header Section */}
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+                        <div className="flex items-center justify-between mb-8">
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                                    Travel Orders
+                                    Complaints Management
                                 </h1>
                                 <p className="text-gray-600">
-                                    Manage employee official travel requests and approvals.
+                                    Track and manage employee complaints and grievances.
                                 </p>
                             </div>
-                            <div className="flex gap-3 mt-4 md:mt-0">
-                                <Button
-                                    onClick={handleExport}
-                                    variant="outline"
-                                    className="px-4 py-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex items-center"
-                                >
-                                    <ArrowUp className="w-4 h-4 mr-2" />
-                                    Export to Excel
-                                </Button>
-                                <Button
-                                    onClick={handleCreateClick}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center"
-                                >
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    New Travel Order
-                                </Button>
-                            </div>
+                            <Button
+                                onClick={handleCreateClick}
+                                className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 flex items-center"
+                            >
+                                <Plus className="w-5 h-5 mr-2" />
+                                New Complaint
+                            </Button>
                         </div>
 
                         {/* Filters Section */}
                         <div className="bg-white p-6 rounded-lg shadow-sm mb-6">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {/* Search */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <Search className="h-4 w-4 text-gray-400" />
+                                            <Search className="h-5 w-5 text-gray-400" />
                                         </div>
                                         <input
                                             type="text"
-                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                            placeholder="Search by name, destination..."
+                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                            placeholder="Search by title or description..."
                                             onChange={(e) => debouncedSearch(e.target.value)}
                                         />
                                     </div>
@@ -971,55 +1023,56 @@ const Travel = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                                     <select
-                                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                         value={statusFilter}
                                         onChange={(e) => setStatusFilter(e.target.value)}
                                     >
                                         <option value="all">All Statuses</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="approved">Approved</option>
-                                        <option value="rejected">Rejected</option>
-                                        <option value="completed">Completed</option>
-                                        <option value="cancelled">Cancelled</option>
+                                        <option value="open">Open</option>
+                                        <option value="investigation">Under Investigation</option>
+                                        <option value="resolved">Resolved</option>
+                                        <option value="closed">Closed</option>
                                     </select>
                                 </div>
                                 
-                                {/* Date Range Filter - From */}
+                                {/* Date Range Filter */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                    <input
-                                        type="date"
-                                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                        value={dateFilter.from}
-                                        onChange={(e) => setDateFilter({...dateFilter, from: e.target.value})}
-                                    />
-                                </div>
-                                
-                                {/* Date Range Filter - To */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                    <input
-                                        type="date"
-                                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                        value={dateFilter.to}
-                                        onChange={(e) => setDateFilter({...dateFilter, to: e.target.value})}
-                                    />
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Date</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <input
+                                                type="date"
+                                                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                                value={dateFilter.from}
+                                                onChange={(e) => setDateFilter({...dateFilter, from: e.target.value})}
+                                                placeholder="From"
+                                            />
+                                        </div>
+                                        <div>
+                                            <input
+                                                type="date"
+                                                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                                value={dateFilter.to}
+                                                onChange={(e) => setDateFilter({...dateFilter, to: e.target.value})}
+                                                placeholder="To"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Travel Orders Table */}
+                        {/* Complaints Table */}
                         <div className="bg-white shadow-md rounded-lg overflow-hidden">
                             {/* Table header */}
-                            <div className="grid grid-cols-9 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <div className="grid grid-cols-7 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 <div className="px-6 py-3 col-span-1">Actions</div>
                                 <div className="px-6 py-3 col-span-1">Status</div>
-                                <div className="px-6 py-3 col-span-2">Employee</div>
-                                <div className="px-6 py-3 col-span-1">Travel Dates</div>
-                                <div className="px-6 py-3 col-span-1">Duration</div>
-                                <div className="px-6 py-3 col-span-1">Destination</div>
-                                <div className="px-6 py-3 col-span-1">Transportation</div>
-                                <div className="px-6 py-3 col-span-1">Purpose</div>
+                                <div className="px-6 py-3 col-span-1">Date</div>
+                                <div className="px-6 py-3 col-span-1">Employee</div>
+                                <div className="px-6 py-3 col-span-1">Complainant</div>
+                                <div className="px-6 py-3 col-span-1">Title</div>
+                                <div className="px-6 py-3 col-span-1">Assigned To</div>
                             </div>
 
                             {/* Table Body - Loading State */}
@@ -1030,27 +1083,27 @@ const Travel = () => {
                             )}
 
                             {/* Table Body - No Results */}
-                            {!loading && allTravelOrders.length === 0 && (
+                            {!loading && complaints.length === 0 && (
                                 <div className="py-16 text-center text-gray-500">
                                     {searchTerm || statusFilter !== 'all' || dateFilter.from || dateFilter.to
-                                        ? 'No travel orders found matching your filters.'
-                                        : 'No travel orders found. Create a new travel order to get started.'}
+                                        ? 'No complaints found matching your filters.'
+                                        : 'No complaints found. Create a new complaint to get started.'}
                                 </div>
                             )}
 
                             {/* Table Body - Results */}
-                            {!loading && allTravelOrders.length > 0 && (
+                            {!loading && complaints.length > 0 && (
                                 <div className="divide-y divide-gray-200">
-                                    {allTravelOrders.map((travelOrder) => (
+                                    {complaints.map((complaint) => (
                                         <div 
-                                            key={travelOrder.id}
-                                            className="grid grid-cols-9 items-center hover:bg-gray-50"
+                                            key={complaint.id}
+                                            className="grid grid-cols-7 items-center hover:bg-gray-50"
                                         >
                                             {/* Actions cell */}
                                             <div className="px-6 py-4 col-span-1 whitespace-nowrap">
                                                 <div className="flex space-x-3">
                                                     <button
-                                                        onClick={() => handleViewClick(travelOrder)}
+                                                        onClick={() => handleViewClick(complaint)}
                                                         className="text-gray-400 hover:text-gray-500"
                                                         title="View"
                                                         type="button"
@@ -1061,100 +1114,82 @@ const Travel = () => {
                                                         </svg>
                                                     </button>
                                                     
-                                                    {travelOrder.status === 'pending' && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleStatusClick(travelOrder)}
-                                                                className="text-gray-400 hover:text-gray-500"
-                                                                title="Update Status"
-                                                                type="button"
-                                                            >
-                                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                            </button>
-                                                            
-                                                            <button
-                                                                onClick={() => handleDeleteClick(travelOrder)}
-                                                                className="text-gray-400 hover:text-red-500"
-                                                                title="Delete"
-                                                                type="button"
-                                                            >
-                                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                </svg>
-                                                            </button>
-                                                        </>
-                                                    )}
+                                                    <button
+                                                        onClick={() => handleEditClick(complaint)}
+                                                        className="text-gray-400 hover:text-gray-500"
+                                                        title="Edit"
+                                                        type="button"
+                                                    >
+                                                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
                                                     
-                                                    {travelOrder.status === 'approved' && (
-                                                        <button
-                                                            onClick={() => handleStatusClick(travelOrder)}
-                                                            className="text-gray-400 hover:text-gray-500"
-                                                            title="Update Status"
-                                                            type="button"
-                                                        >
-                                                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => handleStatusClick(complaint)}
+                                                        className="text-gray-400 hover:text-gray-500"
+                                                        title="Update Status"
+                                                        type="button"
+                                                    >
+                                                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                    </button>
+                                                    
+                                                    <button
+                                                        onClick={() => handleDeleteClick(complaint)}
+                                                        className="text-gray-400 hover:text-red-500"
+                                                        title="Delete"
+                                                        type="button"
+                                                    >
+                                                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    </button>
                                                 </div>
                                             </div>
                                             
                                             {/* Status cell */}
                                             <div className="px-6 py-4 col-span-1 whitespace-nowrap">
-                                                <StatusBadge status={travelOrder.status} />
+                                                <StatusBadge status={complaint.status} />
+                                            </div>
+                                            
+                                            {/* Date cell */}
+                                            <div className="px-6 py-4 col-span-1 whitespace-nowrap text-sm text-gray-500">
+                                                {new Date(complaint.complaint_date).toLocaleDateString()}
                                             </div>
                                             
                                             {/* Employee cell */}
-                                            <div className="px-6 py-4 col-span-2 whitespace-nowrap">
-                                                <div className="font-medium text-gray-900">
-                                                    {travelOrder.employee?.Lname}, {travelOrder.employee?.Fname}
+                                            <div className="px-6 py-4 col-span-1 whitespace-nowrap">
+                                                <div className="text-sm font-medium text-gray-900">
+                                                    {complaint.employee?.Lname}, {complaint.employee?.Fname}
                                                 </div>
-                                                <div className="text-sm text-gray-500">
-                                                    {travelOrder.employee?.idno} • {travelOrder.employee?.Department}
+                                                <div className="text-xs text-gray-500">
+                                                    {complaint.employee?.idno}
                                                 </div>
                                             </div>
                                             
-                                            {/* Travel Dates cell */}
+                                            {/* Complainant cell */}
+                                            <div className="px-6 py-4 col-span-1 whitespace-nowrap">
+                                                <div className="text-sm font-medium text-gray-900">
+                                                    {complaint.complainant?.Lname}, {complaint.complainant?.Fname}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    {complaint.complainant?.idno}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Title cell */}
+                                            <div className="px-6 py-4 col-span-1 whitespace-nowrap text-sm text-gray-900">
+                                                {complaint.complaint_title}
+                                            </div>
+                                            
+                                            {/* Assigned To cell */}
                                             <div className="px-6 py-4 col-span-1 whitespace-nowrap text-sm text-gray-500">
-                                                <div>
-                                                    {new Date(travelOrder.start_date).toLocaleDateString()}
-                                                </div>
-                                                <div>
-                                                    {new Date(travelOrder.end_date).toLocaleDateString()}
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Duration cell */}
-                                            <div className="px-6 py-4 col-span-1 whitespace-nowrap text-sm text-gray-500">
-                                                {travelOrder.total_days} day{travelOrder.total_days !== 1 ? 's' : ''}
-                                            </div>
-                                            
-                                            {/* Destination cell */}
-                                            <div className="px-6 py-4 col-span-1 whitespace-nowrap text-sm text-gray-500">
-                                                <div className="flex items-center">
-                                                    <MapPin className="h-3.5 w-3.5 text-gray-400 mr-1 flex-shrink-0" />
-                                                    <span className="truncate max-w-[120px]" title={travelOrder.destination}>
-                                                        {travelOrder.destination}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Transportation cell */}
-                                            <div className="px-6 py-4 col-span-1 whitespace-nowrap text-sm text-gray-500">
-                                                <div className="flex items-center">
-                                                    <Car className="h-3.5 w-3.5 text-gray-400 mr-1 flex-shrink-0" />
-                                                    <span>{getTransportationTypeDisplay(travelOrder.transportation_type)}</span>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Purpose cell */}
-                                            <div className="px-6 py-4 col-span-1 text-sm text-gray-500">
-                                                <div className="truncate max-w-[150px]" title={travelOrder.purpose}>
-                                                    {travelOrder.purpose}
-                                                </div>
+                                                {complaint.assignedTo 
+                                                    ? complaint.assignedTo.name 
+                                                    : <span className="italic text-gray-400">Not Assigned</span>
+                                                }
                                             </div>
                                         </div>
                                     ))}
@@ -1165,29 +1200,45 @@ const Travel = () => {
                 </div>
             </div>
 
-            {/* Travel Order Modals */}
-            <TravelOrderModal
+            {/* Complaint Modals */}
+            <ComplaintModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
-                title="Create New Travel Order"
-                travelOrder={currentTravelOrder}
-                employees={allEmployees}
-                departments={allDepartments}
-                onChange={setCurrentTravelOrder}
+                title="Create New Complaint"
+                complaint={currentComplaint}
+                employees={employees}
+                users={users}
+                onChange={setCurrentComplaint}
+                onFileChange={handleFileChange}
                 onSubmit={handleCreateSubmit}
                 mode="create"
                 errorMessages={errors}
             />
 
-            <TravelOrderModal
+            <ComplaintModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                title="Edit Complaint"
+                complaint={currentComplaint}
+                employees={employees}
+                users={users}
+                onChange={setCurrentComplaint}
+                onFileChange={handleFileChange}
+                onSubmit={handleUpdateSubmit}
+                mode="edit"
+                errorMessages={errors}
+            />
+
+            <ComplaintModal
                 isOpen={isViewModalOpen}
                 onClose={() => setIsViewModalOpen(false)}
-                title="View Travel Order Details"
-                travelOrder={currentTravelOrder}
-                employees={allEmployees}
-                departments={allDepartments}
-                onChange={setCurrentTravelOrder}
-                onSubmit={() => {}} // No submit action for view mode
+                title="View Complaint Details"
+                complaint={currentComplaint}
+                employees={employees}
+                users={users}
+                onChange={setCurrentComplaint}
+                onFileChange={() => {}}
+                onSubmit={() => {}}
                 mode="view"
                 errorMessages={{}}
             />
@@ -1195,7 +1246,8 @@ const Travel = () => {
             <StatusUpdateModal
                 isOpen={isStatusModalOpen}
                 onClose={() => setIsStatusModalOpen(false)}
-                travelOrder={currentTravelOrder}
+                complaint={currentComplaint}
+                users={users}
                 onSubmit={handleStatusSubmit}
             />
 
@@ -1213,4 +1265,4 @@ const Travel = () => {
     );
 };
 
-export default Travel;
+export default Complaints;

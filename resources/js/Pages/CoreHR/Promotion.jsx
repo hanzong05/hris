@@ -80,8 +80,6 @@ const StatusBadge = ({ status }) => {
     }
 };
 
-// Promotion Modal Component
-// Promotion Modal Component with Enhanced Employee Search
 const PromotionModal = ({ 
     isOpen, 
     onClose, 
@@ -97,7 +95,7 @@ const PromotionModal = ({
     const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
     const [filteredEmployees, setFilteredEmployees] = useState([]);
     
-    // Filter employees when search term or employees list changes
+    // Filter employees when search term or employees list changes - FIXED to prevent infinite loop
     useEffect(() => {
         if (!Array.isArray(employees)) {
             setFilteredEmployees([]);
@@ -141,13 +139,13 @@ const PromotionModal = ({
                    fullNameWithId === searchTermLower;
         });
         
-        // If exact match found, select that employee
-        if (exactMatch) {
+        // If exact match found and different from current selection, update - prevents infinite loop
+        if (exactMatch && promotion.employee_id !== exactMatch.id) {
             onChange({...promotion, employee_id: exactMatch.id});
         }
         
         setFilteredEmployees(filtered);
-    }, [employeeSearchTerm, employees, onChange, promotion]);
+    }, [employeeSearchTerm, employees, onChange, promotion.employee_id]); // Only depend on promotion.employee_id instead of entire promotion object
     
     // Reset search term when modal opens
     useEffect(() => {
@@ -232,7 +230,6 @@ const PromotionModal = ({
                         )}
                         {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
                     </div>
-                    
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Promotion Title</label>
                         {isViewMode ? (
