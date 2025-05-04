@@ -31,6 +31,21 @@ class EmployeeController extends Controller
         
         $employees = $query->get();
         
+        // If it's an AJAX or JSON request, return JSON response
+        // Fix: Make sure to properly check if the request is actually expecting JSON
+        if ($request->expectsJson()) {
+            Log::info('Returning employee list as JSON', [
+                'count' => $employees->count(),
+                'status' => $status
+            ]);
+            
+            return response()->json([
+                'data' => $employees
+            ]);
+        }
+        
+        // Otherwise, render the Inertia page
+        // Fix: Make sure to properly share the data with Inertia
         return Inertia::render('Employee/EmployeePage', [
             'employees' => $employees,
             'currentStatus' => $status,
@@ -39,7 +54,7 @@ class EmployeeController extends Controller
             ],
         ]);
     }
-
+    
     /**
      * Store a newly created employee.
      */
@@ -84,11 +99,20 @@ class EmployeeController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
         }
 
         // Fix: Changed from Employees to Employee
         Employee::create($request->all());
+
+        // Fix: Check if the request expects JSON and return appropriate response
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Employee created successfully'
+            ]);
+        }
 
         return redirect()->back()->with('message', 'Employee created successfully');
     }
@@ -136,6 +160,13 @@ class EmployeeController extends Controller
         ]);
 
         if ($validator->fails()) {
+            // Fix: Check if the request expects JSON and return appropriate response
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            
             return redirect()->back()
                 ->withErrors($validator)
                 ->withInput();
@@ -143,8 +174,28 @@ class EmployeeController extends Controller
 
         try {
             $employee->update($request->all());
+            
+            // Fix: Check if the request expects JSON and return appropriate response
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Employee updated successfully'
+                ]);
+            }
+            
             return redirect()->back()->with('message', 'Employee updated successfully');
         } catch (\Exception $e) {
+            Log::error('Failed to update employee', [
+                'id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fix: Check if the request expects JSON and return appropriate response
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'error' => 'Failed to update employee: ' . $e->getMessage()
+                ], 500);
+            }
+            
             return redirect()->back()
                 ->with('error', 'Failed to update employee: ' . $e->getMessage())
                 ->withInput();
@@ -160,6 +211,13 @@ class EmployeeController extends Controller
             $employee = Employee::findOrFail($id);
             $employee->delete();
             
+            // Fix: Check if the request expects JSON and return appropriate response
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'message' => 'Employee deleted successfully'
+                ]);
+            }
+            
             return redirect()->route('employees.index')->with([
                 'message' => 'Employee deleted successfully'
             ]);
@@ -169,6 +227,13 @@ class EmployeeController extends Controller
                 'id' => $id,
                 'error' => $e->getMessage()
             ]);
+            
+            // Fix: Check if the request expects JSON and return appropriate response
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'error' => 'Failed to delete employee: ' . $e->getMessage()
+                ], 500);
+            }
             
             return redirect()->route('employees.index')->with('error', 'Failed to delete employee');
         }
@@ -180,6 +245,13 @@ class EmployeeController extends Controller
         $employee->JobStatus = 'Inactive';
         $employee->save();
         
+        // Fix: Check if the request expects JSON and return appropriate response
+        if (request()->expectsJson()) {
+            return response()->json([
+                'message' => 'Employee marked as inactive.'
+            ]);
+        }
+        
         return back()->with('message', 'Employee marked as inactive.');
     }
 
@@ -188,6 +260,13 @@ class EmployeeController extends Controller
         $employee = Employee::findOrFail($id);
         $employee->JobStatus = 'Blocked';
         $employee->save();
+        
+        // Fix: Check if the request expects JSON and return appropriate response
+        if (request()->expectsJson()) {
+            return response()->json([
+                'message' => 'Employee blocked successfully.'
+            ]);
+        }
         
         return back()->with('message', 'Employee blocked successfully.');
     }
@@ -198,35 +277,15 @@ class EmployeeController extends Controller
         $employee->JobStatus = 'Active';
         $employee->save();
         
+        // Fix: Check if the request expects JSON and return appropriate response
+        if (request()->expectsJson()) {
+            return response()->json([
+                'message' => 'Employee activated successfully.'
+            ]);
+        }
+        
         return back()->with('message', 'Employee activated successfully.');
     }
-    public function list(Request $request)
-    {
-        $query = Employee::query();
-        
-        // Filter by active status if requested
-        if ($request->has('active_only') && $request->active_only == true) {
-            $query->where('JobStatus', 'Active');
-        }
-        
-        // Optional: Filter by name for search functionality
-        if ($request->has('search') && $request->search) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('Fname', 'like', "%{$search}%")
-                  ->orWhere('Lname', 'like', "%{$search}%")
-                  ->orWhere('idno', 'like', "%{$search}%");
-            });
-        }
-        
-        // Sort employees by last name, first name
-        $query->orderBy('Lname')->orderBy('Fname');
-        
-        return response()->json([
-            'data' => $query->get()
-        ]);
-    }
-
 
     /**
      * Show import page

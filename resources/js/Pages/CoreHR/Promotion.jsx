@@ -81,6 +81,7 @@ const StatusBadge = ({ status }) => {
 };
 
 // Promotion Modal Component
+// Promotion Modal Component with Enhanced Employee Search
 const PromotionModal = ({ 
     isOpen, 
     onClose, 
@@ -93,6 +94,68 @@ const PromotionModal = ({
     errorMessages = {}
 }) => {
     const isViewMode = mode === 'view';
+    const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+    const [filteredEmployees, setFilteredEmployees] = useState([]);
+    
+    // Filter employees when search term or employees list changes
+    useEffect(() => {
+        if (!Array.isArray(employees)) {
+            setFilteredEmployees([]);
+            return;
+        }
+        
+        if (!employeeSearchTerm.trim()) {
+            setFilteredEmployees(employees);
+            return;
+        }
+        
+        const searchTermLower = employeeSearchTerm.toLowerCase();
+        const filtered = employees.filter(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            
+            return firstName.includes(searchTermLower) || 
+                   lastName.includes(searchTermLower) || 
+                   idNo.includes(searchTermLower) ||
+                   fullName.includes(searchTermLower) ||
+                   fullNameReversed.includes(searchTermLower);
+        });
+        
+        // Check for exact match to automatically select
+        const exactMatch = filtered.find(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
+            
+            return firstName === searchTermLower || 
+                   lastName === searchTermLower || 
+                   idNo === searchTermLower ||
+                   fullName === searchTermLower ||
+                   fullNameReversed === searchTermLower ||
+                   fullNameWithId === searchTermLower;
+        });
+        
+        // If exact match found, select that employee
+        if (exactMatch) {
+            onChange({...promotion, employee_id: exactMatch.id});
+        }
+        
+        setFilteredEmployees(filtered);
+    }, [employeeSearchTerm, employees, onChange, promotion]);
+    
+    // Reset search term when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setEmployeeSearchTerm('');
+            setFilteredEmployees(employees || []);
+        }
+    }, [isOpen, employees]);
     
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="md">
@@ -108,64 +171,122 @@ const PromotionModal = ({
                 </div>
                 
                 <form onSubmit={onSubmit} className="space-y-4">
-                <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
-    <select
-        className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.employee_id ? 'border-red-500' : ''}`}
-        value={promotion.employee_id || ''}
-        onChange={(e) => onChange({...promotion, employee_id: e.target.value})}
-        required
-        disabled={isViewMode}
-    >
-        <option value="">Select Employee</option>
-        {employees.map(employee => (
-            <option key={employee.id} value={employee.id}>
-                {employee.Lname}, {employee.Fname} ({employee.idno})
-            </option>
-        ))}
-    </select>
-    {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
-</div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50">
+                                {promotion.employee ? `${promotion.employee.Lname || ''}, ${promotion.employee.Fname || ''} ${promotion.employee.idno ? `(${promotion.employee.idno})` : ''}` : 'Unknown Employee'}
+                            </div>
+                        ) : (
+                            <>
+                                {/* Employee Search Field - Only show in create/edit mode */}
+                                <div className="relative mb-2">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                        placeholder="Search employees by name or ID..."
+                                        value={employeeSearchTerm}
+                                        onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                                    />
+                                    {promotion.employee_id && filteredEmployees.length > 0 && filteredEmployees.find(e => e.id === promotion.employee_id) && (
+                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                            <CheckCircle className="h-4 w-4 text-green-500" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-xs text-gray-500 mb-2">
+                                    {filteredEmployees.length === 0 ? 
+                                        "No matching employees found" : 
+                                        filteredEmployees.length === 1 ? 
+                                            "1 employee found" : 
+                                            `${filteredEmployees.length} employees found`
+                                    }
+                                    {promotion.employee_id && filteredEmployees.find(e => e.id === promotion.employee_id) && 
+                                        " - Employee selected"
+                                    }
+                                </div>
+                                
+                                <select
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.employee_id ? 'border-red-500' : ''}`}
+                                    value={promotion.employee_id || ''}
+                                    onChange={(e) => onChange({...promotion, employee_id: e.target.value})}
+                                    required
+                                >
+                                    <option value="">Select Employee</option>
+                                    {Array.isArray(filteredEmployees) && filteredEmployees.length > 0 ? (
+                                        filteredEmployees.map(employee => (
+                                            <option key={employee.id || `emp-${Math.random()}`} value={employee.id}>
+                                                {employee.Lname || ''}, {employee.Fname || ''} {employee.idno ? `(${employee.idno})` : ''}
+                                            </option>
+                                        ))
+                                    ) : employeeSearchTerm ? (
+                                        <option value="" disabled>No matching employees found</option>
+                                    ) : (
+                                        <option value="" disabled>No employees available</option>
+                                    )}
+                                </select>
+                            </>
+                        )}
+                        {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
+                    </div>
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Promotion Title</label>
-                        <input
-                            type="text"
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.promotion_title ? 'border-red-500' : ''}`}
-                            value={promotion.promotion_title || ''}
-                            onChange={(e) => onChange({...promotion, promotion_title: e.target.value})}
-                            placeholder="e.g. Promotion to Senior Developer"
-                            required
-                            disabled={isViewMode}
-                        />
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50">
+                                {promotion.promotion_title || ''}
+                            </div>
+                        ) : (
+                            <input
+                                type="text"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.promotion_title ? 'border-red-500' : ''}`}
+                                value={promotion.promotion_title || ''}
+                                onChange={(e) => onChange({...promotion, promotion_title: e.target.value})}
+                                placeholder="e.g. Promotion to Senior Developer"
+                                required
+                            />
+                        )}
                         {errorMessages.promotion_title && <p className="mt-1 text-sm text-red-600">{errorMessages.promotion_title}</p>}
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Previous Position</label>
-                            <input
-                                type="text"
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.previous_position ? 'border-red-500' : ''}`}
-                                value={promotion.previous_position || ''}
-                                onChange={(e) => onChange({...promotion, previous_position: e.target.value})}
-                                placeholder="e.g. Junior Developer"
-                                required
-                                disabled={isViewMode}
-                            />
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {promotion.previous_position || ''}
+                                </div>
+                            ) : (
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.previous_position ? 'border-red-500' : ''}`}
+                                    value={promotion.previous_position || ''}
+                                    onChange={(e) => onChange({...promotion, previous_position: e.target.value})}
+                                    placeholder="e.g. Junior Developer"
+                                    required
+                                />
+                            )}
                             {errorMessages.previous_position && <p className="mt-1 text-sm text-red-600">{errorMessages.previous_position}</p>}
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">New Position</label>
-                            <input
-                                type="text"
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.new_position ? 'border-red-500' : ''}`}
-                                value={promotion.new_position || ''}
-                                onChange={(e) => onChange({...promotion, new_position: e.target.value})}
-                                placeholder="e.g. Senior Developer"
-                                required
-                                disabled={isViewMode}
-                            />
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {promotion.new_position || ''}
+                                </div>
+                            ) : (
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.new_position ? 'border-red-500' : ''}`}
+                                    value={promotion.new_position || ''}
+                                    onChange={(e) => onChange({...promotion, new_position: e.target.value})}
+                                    placeholder="e.g. Senior Developer"
+                                    required
+                                />
+                            )}
                             {errorMessages.new_position && <p className="mt-1 text-sm text-red-600">{errorMessages.new_position}</p>}
                         </div>
                     </div>
@@ -173,57 +294,77 @@ const PromotionModal = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Previous Salary</label>
-                            <input
-                                type="number"
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.previous_salary ? 'border-red-500' : ''}`}
-                                value={promotion.previous_salary || ''}
-                                onChange={(e) => onChange({...promotion, previous_salary: e.target.value})}
-                                placeholder="e.g. 50000"
-                                min="0"
-                                step="0.01"
-                                disabled={isViewMode}
-                            />
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {promotion.previous_salary ? parseFloat(promotion.previous_salary).toLocaleString() : ''}
+                                </div>
+                            ) : (
+                                <input
+                                    type="number"
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.previous_salary ? 'border-red-500' : ''}`}
+                                    value={promotion.previous_salary || ''}
+                                    onChange={(e) => onChange({...promotion, previous_salary: e.target.value})}
+                                    placeholder="e.g. 50000"
+                                    min="0"
+                                    step="0.01"
+                                />
+                            )}
                             {errorMessages.previous_salary && <p className="mt-1 text-sm text-red-600">{errorMessages.previous_salary}</p>}
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">New Salary</label>
-                            <input
-                                type="number"
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.new_salary ? 'border-red-500' : ''}`}
-                                value={promotion.new_salary || ''}
-                                onChange={(e) => onChange({...promotion, new_salary: e.target.value})}
-                                placeholder="e.g. 65000"
-                                min="0"
-                                step="0.01"
-                                disabled={isViewMode}
-                            />
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {promotion.new_salary ? parseFloat(promotion.new_salary).toLocaleString() : ''}
+                                </div>
+                            ) : (
+                                <input
+                                    type="number"
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.new_salary ? 'border-red-500' : ''}`}
+                                    value={promotion.new_salary || ''}
+                                    onChange={(e) => onChange({...promotion, new_salary: e.target.value})}
+                                    placeholder="e.g. 65000"
+                                    min="0"
+                                    step="0.01"
+                                />
+                            )}
                             {errorMessages.new_salary && <p className="mt-1 text-sm text-red-600">{errorMessages.new_salary}</p>}
                         </div>
                     </div>
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Promotion Date</label>
-                        <input
-                            type="date"
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.promotion_date ? 'border-red-500' : ''}`}
-                            value={promotion.promotion_date || ''}
-                            onChange={(e) => onChange({...promotion, promotion_date: e.target.value})}
-                            required
-                            disabled={isViewMode}
-                        />
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50">
+                                {promotion.promotion_date ? new Date(promotion.promotion_date).toLocaleDateString() : ''}
+                            </div>
+                        ) : (
+                            <input
+                                type="date"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.promotion_date ? 'border-red-500' : ''}`}
+                                value={promotion.promotion_date || ''}
+                                onChange={(e) => onChange({...promotion, promotion_date: e.target.value})}
+                                required
+                            />
+                        )}
                         {errorMessages.promotion_date && <p className="mt-1 text-sm text-red-600">{errorMessages.promotion_date}</p>}
                     </div>
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                        <textarea
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.description ? 'border-red-500' : ''}`}
-                            value={promotion.description || ''}
-                            onChange={(e) => onChange({...promotion, description: e.target.value})}
-                            placeholder="Reason for promotion and other details"
-                            rows="3"
-                            disabled={isViewMode}
-                        />
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50 whitespace-pre-line min-h-[100px]">
+                                {promotion.description || ''}
+                            </div>
+                        ) : (
+                            <textarea
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.description ? 'border-red-500' : ''}`}
+                                value={promotion.description || ''}
+                                onChange={(e) => onChange({...promotion, description: e.target.value})}
+                                placeholder="Reason for promotion and other details"
+                                rows="3"
+                            />
+                        )}
                         {errorMessages.description && <p className="mt-1 text-sm text-red-600">{errorMessages.description}</p>}
                     </div>
                     
@@ -290,7 +431,6 @@ const PromotionModal = ({
         </Modal>
     );
 };
-
 // Approval Modal Component
 const ApprovalModal = ({ 
     isOpen, 

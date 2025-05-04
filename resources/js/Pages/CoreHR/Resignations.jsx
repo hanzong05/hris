@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+
 import { Head, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Sidebar from '@/Components/Sidebar';
@@ -96,6 +97,68 @@ const ResignationModal = ({
     errorMessages = {}
 }) => {
     const isViewMode = mode === 'view';
+    const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+    const [filteredEmployees, setFilteredEmployees] = useState([]);
+    
+    // Filter employees when search term or employees list changes
+    useEffect(() => {
+        if (!Array.isArray(employees)) {
+            setFilteredEmployees([]);
+            return;
+        }
+        
+        if (!employeeSearchTerm.trim()) {
+            setFilteredEmployees(employees);
+            return;
+        }
+        
+        const searchTermLower = employeeSearchTerm.toLowerCase();
+        const filtered = employees.filter(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            
+            return firstName.includes(searchTermLower) || 
+                   lastName.includes(searchTermLower) || 
+                   idNo.includes(searchTermLower) ||
+                   fullName.includes(searchTermLower) ||
+                   fullNameReversed.includes(searchTermLower);
+        });
+        
+        // Check for exact match to automatically select
+        const exactMatch = filtered.find(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
+            
+            return firstName === searchTermLower || 
+                   lastName === searchTermLower || 
+                   idNo === searchTermLower ||
+                   fullName === searchTermLower ||
+                   fullNameReversed === searchTermLower ||
+                   fullNameWithId === searchTermLower;
+        });
+        
+        // If exact match found, select that employee
+        if (exactMatch) {
+            onChange({...resignation, employee_id: exactMatch.id});
+        }
+        
+        setFilteredEmployees(filtered);
+    }, [employeeSearchTerm, employees, onChange, resignation]);
+    
+    // Reset search term when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setEmployeeSearchTerm('');
+            setFilteredEmployees(employees || []);
+        }
+    }, [isOpen, employees]);
     
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="md">
@@ -111,48 +174,108 @@ const ResignationModal = ({
                 </div>
                 
                 <form onSubmit={onSubmit} className="space-y-4">
-                <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
-    <select
-        className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.employee_id ? 'border-red-500' : ''}`}
-        value={resignation.employee_id || ''}
-        onChange={(e) => onChange({...resignation, employee_id: e.target.value})}
-        required
-        disabled={isViewMode}
-    >
-        <option value="">Select Employee</option>
-        {employees.map(employee => (
-            <option key={employee.id} value={employee.id}>
-                {employee.Lname}, {employee.Fname} ({employee.idno})
-            </option>
-        ))}
-    </select>
-    {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
-</div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+                    {isViewMode ? (
+                        <div className="p-2 border rounded bg-gray-50">
+                            {resignation.employee ? `${resignation.employee.Lname || ''}, ${resignation.employee.Fname || ''} ${resignation.employee.idno ? `(${resignation.employee.idno})` : ''}` : 'Unknown Employee'}
+                        </div>
+                    ) : (
+                        <>
+                            {/* Employee Search Field - Only show in create/edit mode */}
+                            <div className="relative mb-2">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Search className="h-4 w-4 text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                    placeholder="Search employees by name or ID..."
+                                    value={employeeSearchTerm}
+                                    onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                                />
+                                {resignation.employee_id && filteredEmployees.length > 0 && filteredEmployees.find(e => e.id === resignation.employee_id) && (
+                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                        <CheckCircle className="h-4 w-4 text-green-500" />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="text-xs text-gray-500 mb-2">
+                                {filteredEmployees.length === 0 ? 
+                                    "No matching employees found" : 
+                                    filteredEmployees.length === 1 ? 
+                                        "1 employee found" : 
+                                        `${filteredEmployees.length} employees found`
+                                }
+                                {resignation.employee_id && filteredEmployees.find(e => e.id === resignation.employee_id) && 
+                                    " - Employee selected"
+                                }
+                            </div>
+                            
+                            <select
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.employee_id ? 'border-red-500' : ''}`}
+                                value={resignation.employee_id || ''}
+                                onChange={(e) => onChange({...resignation, employee_id: e.target.value})}
+                                required
+                            >
+                                <option value="">Select Employee</option>
+                                {Array.isArray(filteredEmployees) && filteredEmployees.length > 0 ? (
+                                    filteredEmployees.map(employee => (
+                                        <option key={employee.id || `emp-${Math.random()}`} value={employee.id}>
+                                            {employee.Lname || ''}, {employee.Fname || ''} {employee.idno ? `(${employee.idno})` : ''}
+                                        </option>
+                                    ))
+                                ) : employeeSearchTerm ? (
+                                    <option value="" disabled>No matching employees found</option>
+                                ) : (
+                                    <option value="" disabled>No employees available</option>
+                                )}
+                            </select>
+                        </>
+                    )}
+                    {errorMessages.employee_id && (
+                        <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>
+                    )}
+                    
+                    {/* Debug info - only shown when employees array is empty */}
+                    {(!Array.isArray(employees) || employees.length === 0) && !isViewMode && (
+                        <p className="mt-1 text-xs text-amber-600">No employees loaded. Check the console for more information.</p>
+                    )}
+                  </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Notice Date</label>
-                            <input
-                                type="date"
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.notice_date ? 'border-red-500' : ''}`}
-                                value={resignation.notice_date || ''}
-                                onChange={(e) => onChange({...resignation, notice_date: e.target.value})}
-                                required
-                                disabled={isViewMode}
-                            />
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {resignation.notice_date ? new Date(resignation.notice_date).toLocaleDateString() : 'mm/dd/yyyy'}
+                                </div>
+                            ) : (
+                                <input
+                                    type="date"
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.notice_date ? 'border-red-500' : ''}`}
+                                    value={resignation.notice_date || ''}
+                                    onChange={(e) => onChange({...resignation, notice_date: e.target.value})}
+                                    required
+                                />
+                            )}
                             {errorMessages.notice_date && <p className="mt-1 text-sm text-red-600">{errorMessages.notice_date}</p>}
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Resignation Date</label>
-                            <input
-                                type="date"
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.resignation_date ? 'border-red-500' : ''}`}
-                                value={resignation.resignation_date || ''}
-                                onChange={(e) => onChange({...resignation, resignation_date: e.target.value})}
-                                required
-                                disabled={isViewMode}
-                            />
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {resignation.resignation_date ? new Date(resignation.resignation_date).toLocaleDateString() : 'mm/dd/yyyy'}
+                                </div>
+                            ) : (
+                                <input
+                                    type="date"
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.resignation_date ? 'border-red-500' : ''}`}
+                                    value={resignation.resignation_date || ''}
+                                    onChange={(e) => onChange({...resignation, resignation_date: e.target.value})}
+                                    required
+                                />
+                            )}
                             <p className="mt-1 text-xs text-gray-500">Last working day</p>
                             {errorMessages.resignation_date && <p className="mt-1 text-sm text-red-600">{errorMessages.resignation_date}</p>}
                         </div>
@@ -160,15 +283,20 @@ const ResignationModal = ({
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Resignation</label>
-                        <textarea
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.reason ? 'border-red-500' : ''}`}
-                            value={resignation.reason || ''}
-                            onChange={(e) => onChange({...resignation, reason: e.target.value})}
-                            placeholder="Detailed reason for resignation..."
-                            rows="4"
-                            required
-                            disabled={isViewMode}
-                        />
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50 whitespace-pre-line min-h-[100px]">
+                                {resignation.reason || ''}
+                            </div>
+                        ) : (
+                            <textarea
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.reason ? 'border-red-500' : ''}`}
+                                value={resignation.reason || ''}
+                                onChange={(e) => onChange({...resignation, reason: e.target.value})}
+                                placeholder="Detailed reason for resignation..."
+                                rows="4"
+                                required
+                            />
+                        )}
                         {errorMessages.reason && <p className="mt-1 text-sm text-red-600">{errorMessages.reason}</p>}
                     </div>
                     
@@ -179,7 +307,6 @@ const ResignationModal = ({
                                 type="file"
                                 className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.document ? 'border-red-500' : ''}`}
                                 onChange={(e) => onFileChange(e.target.files[0])}
-                                disabled={isViewMode}
                             />
                             <p className="mt-1 text-xs text-gray-500">Upload resignation letter (PDF, DOC)</p>
                             {errorMessages.document && <p className="mt-1 text-sm text-red-600">{errorMessages.document}</p>}
@@ -263,7 +390,6 @@ const ResignationModal = ({
         </Modal>
     );
 };
-
 // Approval Modal Component
 const ApprovalModal = ({ 
     isOpen, 
@@ -462,30 +588,54 @@ const Resignations = () => {
     });
 
     // Load data
-    const loadData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [resignationsResponse, employeesResponse] = await Promise.all([
-                axios.get('/resignations/list', {
-                    params: {
-                        search: searchTerm,
-                        status: statusFilter !== 'all' ? statusFilter : null,
-                        date_from: dateFilter.from || null,
-                        date_to: dateFilter.to || null
-                    }
-                }),
-                axios.get('/employees/list', { params: { active_only: true } })  // This endpoint doesn't exist
-            ]);
-            
-            setResignations(resignationsResponse.data.data || []);
-            setEmployees(employeesResponse.data.data || []);  // This stores employees in state
-        } catch (error) {
-            console.error('Error loading data:', error);
-            showToast('Error loading data: ' + (error.response?.data?.message || error.message), 'error');
-        } finally {
-            setLoading(false);
+   // Updated loadData function in the Resignations component
+const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+        // First fetch resignations data
+        const resignationsResponse = await axios.get('/resignations/list', {
+            params: {
+                search: searchTerm,
+                status: statusFilter !== 'all' ? statusFilter : null,
+                date_from: dateFilter.from || null,
+                date_to: dateFilter.to || null
+            }
+        });
+        
+        // Then fetch employees data using the existing route
+        // Make sure to include the AJAX header to get JSON response
+        const employeesResponse = await axios.get('/employees/list', { 
+            params: { active_only: true },
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        });
+        
+        // Log responses for debugging
+        console.log('Resignations response:', resignationsResponse.data);
+        console.log('Employees response:', employeesResponse.data);
+        
+        // Update state with the fetched data
+        setResignations(resignationsResponse.data.data || []);
+        
+        // Handle employee data
+        if (employeesResponse.data && employeesResponse.data.data) {
+            setEmployees(employeesResponse.data.data);
+        } else if (Array.isArray(employeesResponse.data)) {
+            setEmployees(employeesResponse.data);
+        } else {
+            console.error('Unexpected employee data format:', employeesResponse.data);
+            setEmployees([]);
         }
-    }, [searchTerm, statusFilter, dateFilter]);
+    } catch (error) {
+        console.error('Error loading data:', error);
+        console.error('Error details:', error.response?.data);
+        showToast('Error loading data: ' + (error.response?.data?.message || error.message), 'error');
+    } finally {
+        setLoading(false);
+    }
+}, [searchTerm, statusFilter, dateFilter]);
 
     // Load data on component mount and when filters change
     useEffect(() => {

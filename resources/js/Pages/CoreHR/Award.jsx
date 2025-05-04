@@ -334,27 +334,27 @@ const Award = () => {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [resignationsResponse, employeesResponse] = await Promise.all([
-                axios.get('/resignations/list', {
+            const [awardsResponse, employeesResponse] = await Promise.all([
+                axios.get('/awards/list', {
                     params: {
                         search: searchTerm,
-                        status: statusFilter !== 'all' ? statusFilter : null,
+                        award_type: awardTypeFilter !== 'all' ? awardTypeFilter : null,
                         date_from: dateFilter.from || null,
                         date_to: dateFilter.to || null
                     }
                 }),
-                axios.get('/employees/list', { params: { active_only: true } })  // This endpoint doesn't exist
+                axios.get('/employees/list', { params: { active_only: true } })
             ]);
             
-            setResignations(resignationsResponse.data.data || []);
-            setEmployees(employeesResponse.data.data || []);  // This stores employees in state
+            setAwards(awardsResponse.data.data || []);
+            setEmployees(employeesResponse.data.data || []);
         } catch (error) {
             console.error('Error loading data:', error);
             showToast('Error loading data: ' + (error.response?.data?.message || error.message), 'error');
         } finally {
             setLoading(false);
         }
-    }, [searchTerm, statusFilter, dateFilter]);
+    }, [searchTerm, awardTypeFilter, dateFilter]);
 
     // Load data on component mount and when filters change
     useEffect(() => {

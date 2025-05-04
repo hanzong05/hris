@@ -83,7 +83,7 @@ const StatusBadge = ({ status }) => {
     }
 };
 
-// Complaint Modal Component
+// Complaint Modal Component with Enhanced Employee Search
 const ComplaintModal = ({ 
     isOpen, 
     onClose, 
@@ -98,6 +98,124 @@ const ComplaintModal = ({
     errorMessages = {}
 }) => {
     const isViewMode = mode === 'view';
+    const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+    const [complainantSearchTerm, setComplainantSearchTerm] = useState('');
+    const [filteredEmployees, setFilteredEmployees] = useState([]);
+    const [filteredComplainants, setFilteredComplainants] = useState([]);
+    
+    // Filter employees when search term or employees list changes
+    useEffect(() => {
+        if (!Array.isArray(employees)) {
+            setFilteredEmployees([]);
+            return;
+        }
+        
+        if (!employeeSearchTerm.trim()) {
+            setFilteredEmployees(employees);
+            return;
+        }
+        
+        const searchTermLower = employeeSearchTerm.toLowerCase();
+        const filtered = employees.filter(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            
+            return firstName.includes(searchTermLower) || 
+                   lastName.includes(searchTermLower) || 
+                   idNo.includes(searchTermLower) ||
+                   fullName.includes(searchTermLower) ||
+                   fullNameReversed.includes(searchTermLower);
+        });
+        
+        // Check for exact match to automatically select
+        const exactMatch = filtered.find(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
+            
+            return firstName === searchTermLower || 
+                   lastName === searchTermLower || 
+                   idNo === searchTermLower ||
+                   fullName === searchTermLower ||
+                   fullNameReversed === searchTermLower ||
+                   fullNameWithId === searchTermLower;
+        });
+        
+        // If exact match found, select that employee
+        if (exactMatch) {
+            onChange({...complaint, employee_id: exactMatch.id});
+        }
+        
+        setFilteredEmployees(filtered);
+    }, [employeeSearchTerm, employees, onChange, complaint]);
+    
+    // Filter complainants
+    useEffect(() => {
+        if (!Array.isArray(employees)) {
+            setFilteredComplainants([]);
+            return;
+        }
+        
+        if (!complainantSearchTerm.trim()) {
+            setFilteredComplainants(employees);
+            return;
+        }
+        
+        const searchTermLower = complainantSearchTerm.toLowerCase();
+        const filtered = employees.filter(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            
+            return firstName.includes(searchTermLower) || 
+                   lastName.includes(searchTermLower) || 
+                   idNo.includes(searchTermLower) ||
+                   fullName.includes(searchTermLower) ||
+                   fullNameReversed.includes(searchTermLower);
+        });
+        
+        // Check for exact match to automatically select
+        const exactMatch = filtered.find(employee => {
+            const firstName = (employee.Fname || '').toLowerCase();
+            const lastName = (employee.Lname || '').toLowerCase();
+            const idNo = (employee.idno || '').toLowerCase();
+            const fullName = `${firstName} ${lastName}`.toLowerCase();
+            const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+            const fullNameWithId = `${lastName}, ${firstName} (${idNo})`.toLowerCase();
+            
+            return firstName === searchTermLower || 
+                   lastName === searchTermLower || 
+                   idNo === searchTermLower ||
+                   fullName === searchTermLower ||
+                   fullNameReversed === searchTermLower ||
+                   fullNameWithId === searchTermLower;
+        });
+        
+        // If exact match found, select that employee
+        if (exactMatch) {
+            onChange({...complaint, complainant_id: exactMatch.id});
+        }
+        
+        setFilteredComplainants(filtered);
+    }, [complainantSearchTerm, employees, onChange, complaint]);
+    
+    // Reset search terms when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setEmployeeSearchTerm('');
+            setComplainantSearchTerm('');
+            setFilteredEmployees(employees || []);
+            setFilteredComplainants(employees || []);
+        }
+    }, [isOpen, employees]);
     
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="md">
@@ -116,80 +234,182 @@ const ComplaintModal = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Employee (Against)</label>
-                            <select
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.employee_id ? 'border-red-500' : ''}`}
-                                value={complaint.employee_id || ''}
-                                onChange={(e) => onChange({...complaint, employee_id: e.target.value})}
-                                required
-                                disabled={isViewMode}
-                            >
-                                <option value="">Select Employee</option>
-                                {employees.map(employee => (
-                                    <option key={employee.id} value={employee.id}>
-                                        {employee.Lname}, {employee.Fname} ({employee.idno})
-                                    </option>
-                                ))}
-                            </select>
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {complaint.employee ? `${complaint.employee.Lname || ''}, ${complaint.employee.Fname || ''} ${complaint.employee.idno ? `(${complaint.employee.idno})` : ''}` : 'Unknown Employee'}
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Employee Search Field */}
+                                    <div className="relative mb-2">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Search className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                            placeholder="Search employee by name or ID..."
+                                            value={employeeSearchTerm}
+                                            onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                                        />
+                                        {complaint.employee_id && filteredEmployees.length > 0 && filteredEmployees.find(e => e.id === complaint.employee_id) && (
+                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mb-2">
+                                        {filteredEmployees.length === 0 ? 
+                                            "No matching employees found" : 
+                                            filteredEmployees.length === 1 ? 
+                                                "1 employee found" : 
+                                                `${filteredEmployees.length} employees found`
+                                        }
+                                        {complaint.employee_id && filteredEmployees.find(e => e.id === complaint.employee_id) && 
+                                            " - Employee selected"
+                                        }
+                                    </div>
+                                    
+                                    <select
+                                        className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.employee_id ? 'border-red-500' : ''}`}
+                                        value={complaint.employee_id || ''}
+                                        onChange={(e) => onChange({...complaint, employee_id: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Employee</option>
+                                        {Array.isArray(filteredEmployees) && filteredEmployees.length > 0 ? (
+                                            filteredEmployees.map(employee => (
+                                                <option key={employee.id || `emp-${Math.random()}`} value={employee.id}>
+                                                    {employee.Lname || ''}, {employee.Fname || ''} {employee.idno ? `(${employee.idno})` : ''}
+                                                </option>
+                                            ))
+                                        ) : employeeSearchTerm ? (
+                                            <option value="" disabled>No matching employees found</option>
+                                        ) : (
+                                            <option value="" disabled>No employees available</option>
+                                        )}
+                                    </select>
+                                </>
+                            )}
                             {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
                         </div>
+                        
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Complainant (Filed By)</label>
-                            <select
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.complainant_id ? 'border-red-500' : ''}`}
-                                value={complaint.complainant_id || ''}
-                                onChange={(e) => onChange({...complaint, complainant_id: e.target.value})}
-                                required
-                                disabled={isViewMode}
-                            >
-                                <option value="">Select Complainant</option>
-                                {employees.map(employee => (
-                                    <option key={employee.id} value={employee.id}>
-                                        {employee.Lname}, {employee.Fname} ({employee.idno})
-                                    </option>
-                                ))}
-                            </select>
+                            {isViewMode ? (
+                                <div className="p-2 border rounded bg-gray-50">
+                                    {complaint.complainant ? `${complaint.complainant.Lname || ''}, ${complaint.complainant.Fname || ''} ${complaint.complainant.idno ? `(${complaint.complainant.idno})` : ''}` : 'Unknown Employee'}
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Complainant Search Field */}
+                                    <div className="relative mb-2">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Search className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                            placeholder="Search complainant by name or ID..."
+                                            value={complainantSearchTerm}
+                                            onChange={(e) => setComplainantSearchTerm(e.target.value)}
+                                        />
+                                        {complaint.complainant_id && filteredComplainants.length > 0 && filteredComplainants.find(e => e.id === complaint.complainant_id) && (
+                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mb-2">
+                                        {filteredComplainants.length === 0 ? 
+                                            "No matching employees found" : 
+                                            filteredComplainants.length === 1 ? 
+                                                "1 employee found" : 
+                                                `${filteredComplainants.length} employees found`
+                                        }
+                                        {complaint.complainant_id && filteredComplainants.find(e => e.id === complaint.complainant_id) && 
+                                            " - Complainant selected"
+                                        }
+                                    </div>
+                                    
+                                    <select
+                                        className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.complainant_id ? 'border-red-500' : ''}`}
+                                        value={complaint.complainant_id || ''}
+                                        onChange={(e) => onChange({...complaint, complainant_id: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Complainant</option>
+                                        {Array.isArray(filteredComplainants) && filteredComplainants.length > 0 ? (
+                                            filteredComplainants.map(employee => (
+                                                <option key={employee.id || `emp-${Math.random()}`} value={employee.id}>
+                                                    {employee.Lname || ''}, {employee.Fname || ''} {employee.idno ? `(${employee.idno})` : ''}
+                                                </option>
+                                            ))
+                                        ) : complainantSearchTerm ? (
+                                            <option value="" disabled>No matching employees found</option>
+                                        ) : (
+                                            <option value="" disabled>No employees available</option>
+                                        )}
+                                    </select>
+                                </>
+                            )}
                             {errorMessages.complainant_id && <p className="mt-1 text-sm text-red-600">{errorMessages.complainant_id}</p>}
                         </div>
                     </div>
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Title</label>
-                        <input
-                            type="text"
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.complaint_title ? 'border-red-500' : ''}`}
-                            value={complaint.complaint_title || ''}
-                            onChange={(e) => onChange({...complaint, complaint_title: e.target.value})}
-                            placeholder="e.g. Unprofessional Behavior"
-                            required
-                            disabled={isViewMode}
-                        />
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50">
+                                {complaint.complaint_title || ''}
+                            </div>
+                        ) : (
+                            <input
+                                type="text"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.complaint_title ? 'border-red-500' : ''}`}
+                                value={complaint.complaint_title || ''}
+                                onChange={(e) => onChange({...complaint, complaint_title: e.target.value})}
+                                placeholder="e.g. Unprofessional Behavior"
+                                required
+                            />
+                        )}
                         {errorMessages.complaint_title && <p className="mt-1 text-sm text-red-600">{errorMessages.complaint_title}</p>}
                     </div>
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Description</label>
-                        <textarea
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.complaint_description ? 'border-red-500' : ''}`}
-                            value={complaint.complaint_description || ''}
-                            onChange={(e) => onChange({...complaint, complaint_description: e.target.value})}
-                            placeholder="Detailed description of the complaint..."
-                            rows="4"
-                            required
-                            disabled={isViewMode}
-                        />
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50 whitespace-pre-line min-h-[100px]">
+                                {complaint.complaint_description || ''}
+                            </div>
+                        ) : (
+                            <textarea
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.complaint_description ? 'border-red-500' : ''}`}
+                                value={complaint.complaint_description || ''}
+                                onChange={(e) => onChange({...complaint, complaint_description: e.target.value})}
+                                placeholder="Detailed description of the complaint..."
+                                rows="4"
+                                required
+                            />
+                        )}
                         {errorMessages.complaint_description && <p className="mt-1 text-sm text-red-600">{errorMessages.complaint_description}</p>}
                     </div>
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Date</label>
-                        <input
-                            type="date"
-                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.complaint_date ? 'border-red-500' : ''}`}
-                            value={complaint.complaint_date || ''}
-                            onChange={(e) => onChange({...complaint, complaint_date: e.target.value})}
-                            required
-                            disabled={isViewMode}
-                        />
+                        {isViewMode ? (
+                            <div className="p-2 border rounded bg-gray-50">
+                                {complaint.complaint_date ? new Date(complaint.complaint_date).toLocaleDateString() : ''}
+                            </div>
+                        ) : (
+                            <input
+                                type="date"
+                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.complaint_date ? 'border-red-500' : ''}`}
+                                value={complaint.complaint_date || ''}
+                                onChange={(e) => onChange({...complaint, complaint_date: e.target.value})}
+                                required
+                            />
+                        )}
                         {errorMessages.complaint_date && <p className="mt-1 text-sm text-red-600">{errorMessages.complaint_date}</p>}
                     </div>
                     
@@ -200,7 +420,6 @@ const ComplaintModal = ({
                                 type="file"
                                 className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.document ? 'border-red-500' : ''}`}
                                 onChange={(e) => onFileChange(e.target.files[0])}
-                                disabled={isViewMode}
                             />
                             <p className="mt-1 text-xs text-gray-500">Upload supporting documents (PDF, DOC, JPG, PNG)</p>
                             {errorMessages.document && <p className="mt-1 text-sm text-red-600">{errorMessages.document}</p>}
@@ -215,15 +434,6 @@ const ComplaintModal = ({
                                     <StatusBadge status={complaint.status} />
                                 </div>
                             </div>
-                            
-                            {complaint.assigned_to && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                                    <div className="mt-1 text-sm text-gray-900">
-                                        {complaint.assignedTo ? complaint.assignedTo.name : 'Not Assigned'}
-                                    </div>
-                                </div>
-                            )}
                             
                             {complaint.document_path && (
                                 <div>
@@ -284,24 +494,20 @@ const ComplaintModal = ({
         </Modal>
     );
 };
-
 // Status Update Modal Component
 const StatusUpdateModal = ({ 
     isOpen, 
     onClose, 
-    complaint, 
-    users,
+    complaint,
     onSubmit
 }) => {
     const [status, setStatus] = useState(complaint?.status || 'open');
-    const [assignedTo, setAssignedTo] = useState(complaint?.assigned_to || '');
     const [resolution, setResolution] = useState(complaint?.resolution || '');
     const [resolutionDate, setResolutionDate] = useState(complaint?.resolution_date || '');
     
     useEffect(() => {
         if (isOpen) {
             setStatus(complaint?.status || 'open');
-            setAssignedTo(complaint?.assigned_to || '');
             setResolution(complaint?.resolution || '');
             setResolutionDate(complaint?.resolution_date || '');
         }
@@ -311,7 +517,6 @@ const StatusUpdateModal = ({
         e.preventDefault();
         onSubmit({
             status,
-            assigned_to: assignedTo,
             resolution: status === 'resolved' || status === 'closed' ? resolution : '',
             resolution_date: status === 'resolved' || status === 'closed' ? resolutionDate : null
         });
@@ -365,20 +570,6 @@ const StatusUpdateModal = ({
                             <option value="investigation">Under Investigation</option>
                             <option value="resolved">Resolved</option>
                             <option value="closed">Closed</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                        <select
-                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            value={assignedTo}
-                            onChange={(e) => setAssignedTo(e.target.value)}
-                        >
-                            <option value="">Not Assigned</option>
-                            {users.map(user => (
-                                <option key={user.id} value={user.id}>{user.name}</option>
-                            ))}
                         </select>
                     </div>
                     
@@ -482,27 +673,54 @@ const Complaints = () => {
     });
 
     // Load data
+    // Load data with better error handling
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [complaintsResponse, employeesResponse, usersResponse] = await Promise.all([
-                axios.get('/complaints/list', {
+            // First try to get complaints data
+            let complaintsData = [];
+            let employeesData = [];
+            let usersData = [];
+            
+            try {
+                const complaintsResponse = await axios.get('/complaints/list', {
                     params: {
                         search: searchTerm,
                         status: statusFilter !== 'all' ? statusFilter : null,
                         date_from: dateFilter.from || null,
                         date_to: dateFilter.to || null
                     }
-                }),
-                axios.get('/employees/list', { params: { active_only: true } }),
-                axios.get('/users/list')
-            ]);
+                });
+                complaintsData = complaintsResponse.data.data || [];
+            } catch (error) {
+                console.error('Error loading complaints:', error);
+                showToast('Error loading complaints: ' + (error.response?.data?.message || error.message), 'error');
+            }
+
+            try {
+                const employeesResponse = await axios.get('/employees/list', { params: { active_only: true } });
+                employeesData = employeesResponse.data.data || [];
+            } catch (error) {
+                console.error('Error loading employees:', error);
+                showToast('Error loading employees: ' + (error.response?.data?.message || error.message), 'error');
+            }
+
+            try {
+                const usersResponse = await axios.get('/users/list');
+                usersData = usersResponse.data.data || [];
+            } catch (error) {
+                console.error('Error loading users:', error);
+                // For user data, we'll provide an empty array instead of showing a toast
+                // as this seems to be a non-critical data component
+                console.warn('Users data not available. Some features may be limited.');
+                usersData = [];
+            }
             
-            setComplaints(complaintsResponse.data.data || []);
-            setEmployees(employeesResponse.data.data || []);
-            setUsers(usersResponse.data.data || []);
+            setComplaints(complaintsData);
+            setEmployees(employeesData);
+            setUsers(usersData);
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('Error in loadData:', error);
             showToast('Error loading data: ' + (error.response?.data?.message || error.message), 'error');
         } finally {
             setLoading(false);
@@ -702,7 +920,6 @@ const Complaints = () => {
             }
         });
     };
-
     return (
         <AuthenticatedLayout>
             <Head title="Complaints Management" />
@@ -810,7 +1027,6 @@ const Complaints = () => {
                                 <div className="px-6 py-3 col-span-1">Employee</div>
                                 <div className="px-6 py-3 col-span-1">Complainant</div>
                                 <div className="px-6 py-3 col-span-1">Title</div>
-                                <div className="px-6 py-3 col-span-1">Assigned To</div>
                             </div>
 
                             {/* Table Body - Loading State */}
@@ -922,13 +1138,7 @@ const Complaints = () => {
                                                 {complaint.complaint_title}
                                             </div>
                                             
-                                            {/* Assigned To cell */}
-                                            <div className="px-6 py-4 col-span-1 whitespace-nowrap text-sm text-gray-500">
-                                                {complaint.assignedTo 
-                                                    ? complaint.assignedTo.name 
-                                                    : <span className="italic text-gray-400">Not Assigned</span>
-                                                }
-                                            </div>
+                                           
                                         </div>
                                     ))}
                                 </div>

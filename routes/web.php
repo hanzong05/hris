@@ -25,6 +25,7 @@ use App\Http\Controllers\ResignationController;
 use App\Http\Controllers\ComplaintController;
 use App\Http\Controllers\WarningController;
 use App\Http\Controllers\TerminationController;
+use App\Http\Controllers\DepartmentController;
 
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -111,7 +112,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     ->prefix('employees')
     ->group(function () {
         Route::get('/', [EmployeeController::class, 'index'])->name('employees.index');
-        Route::get('/list', [EmployeeController::class, 'list'])->name('employees.list'); // Add this line
+        
+        Route::get('/list', [EmployeeController::class, 'index'])->name('employees.list');
         Route::post('/', [EmployeeController::class, 'store'])->name('employees.store');
         Route::put('/{id}', [EmployeeController::class, 'update'])->name('employees.update');
         Route::delete('/{id}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
