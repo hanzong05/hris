@@ -28,6 +28,8 @@ use App\Http\Controllers\TerminationController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\LineController;
 use App\Http\Controllers\SectionController;
+use App\Http\Controllers\TrainingsController;
+use App\Http\Controllers\MeetingsController; 
 
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -514,5 +516,28 @@ Route::middleware(['role:superadmin,hrd'])->group(function () {
     Route::get('/travel/export', [TravelController::class, 'export'])->name('travel.export');
 });
 
+// Add this route to your existing middleware group for meetings
+Route::middleware(['auth', 'verified', 'role:superadmin,hrd'])->group(function () {
+    // Existing routes...
+    
+    // Meetings Route - matches your JSX filename
+    Route::get('/meetings', function () {
+        return Inertia::render('Meeting&Events/Meetings', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('meetings.index');
+    
+    // API routes for Meetings
+    Route::get('/meetings/list', [MeetingsController::class, 'list'])
+        ->name('meetings.list');
+    Route::post('/meetings', [MeetingsController::class, 'store'])
+        ->name('meetings.store');
+    Route::put('/meetings/{id}', [MeetingsController::class, 'update'])
+        ->name('meetings.update');
+    Route::delete('/meetings/{id}', [MeetingsController::class, 'destroy'])
+        ->name('meetings.destroy');
+    Route::get('/meetings/export', [MeetingsController::class, 'export'])
+        ->name('meetings.export');
+});
 // Include additional authentication routes
 require __DIR__.'/auth.php';
