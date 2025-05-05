@@ -522,7 +522,7 @@ Route::middleware(['auth', 'verified', 'role:superadmin,hrd'])->group(function (
     
     // Meetings Route - matches your JSX filename
     Route::get('/meetings', function () {
-        return Inertia::render('Meeting&Events/Meetings', [
+        return Inertia::render('MeetingAndEvents/Meetings', [
             'auth' => ['user' => Auth::user()]
         ]);
     })->name('meetings.index');
@@ -538,6 +538,28 @@ Route::middleware(['auth', 'verified', 'role:superadmin,hrd'])->group(function (
         ->name('meetings.destroy');
     Route::get('/meetings/export', [MeetingsController::class, 'export'])
         ->name('meetings.export');
+        Route::get('/api/employees', [EmployeeController::class, 'getEmployeesForSelect'])
+    ->name('api.employees');
+
+    Route::get('/events', function () {
+        return Inertia::render('MeetingAndEvents/Events', [
+            'auth' => ['user' => Auth::user()]
+        ]);
+    })->name('events.index');
+    
+    // API routes for Events
+    Route::get('/events/list', [EventsController::class, 'list'])
+        ->name('events.list');
+    Route::post('/events', [EventsController::class, 'store'])
+        ->name('events.store');
+    Route::put('/events/{id}', [EventsController::class, 'update'])
+        ->name('events.update');
+    Route::delete('/events/{id}', [EventsController::class, 'destroy'])
+        ->name('events.destroy');
+    Route::post('/events/{id}/status', [EventsController::class, 'updateStatus'])
+        ->name('events.updateStatus');
+    Route::get('/events/export', [EventsController::class, 'export'])
+        ->name('events.export');
 });
 // Include additional authentication routes
 require __DIR__.'/auth.php';

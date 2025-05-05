@@ -31,8 +31,6 @@ class EmployeeController extends Controller
         
         $employees = $query->get();
         
-        // If it's an AJAX or JSON request, return JSON response
-        // Fix: Make sure to properly check if the request is actually expecting JSON
         if ($request->expectsJson()) {
             Log::info('Returning employee list as JSON', [
                 'count' => $employees->count(),
@@ -43,7 +41,6 @@ class EmployeeController extends Controller
                 'data' => $employees
             ]);
         }
-        
         // Otherwise, render the Inertia page
         // Fix: Make sure to properly share the data with Inertia
         return Inertia::render('Employee/EmployeePage', [

@@ -1,8 +1,8 @@
-// Fix the imports at the top of your file
 import React, { useState, useEffect } from 'react';
 import { Head, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Sidebar from '@/Components/Sidebar';
+import axios from 'axios'; // Add Axios import
 import { 
     Plus, 
     Search, 
@@ -27,13 +27,86 @@ import {
     Video,
     Link
 } from 'lucide-react';
-import { Alert, AlertDescription } from '@/Components/ui/alert';
-import { Button } from '@/Components/ui/button';
-import { Card, CardContent } from '@/Components/ui/card';
-// Fix the tabs import with proper case
-import { Tabs, TabsList, TabsTrigger } from '@/Components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import Modal from '@/Components/Modal';
 import ConfirmModal from '@/Components/ConfirmModal';
+
+// Simple Tabs Component
+const Tabs = ({ children, defaultValue, className = "", onValueChange }) => {
+  const [activeTab, setActiveTab] = useState(defaultValue);
+  
+  useEffect(() => {
+    if (onValueChange) {
+      onValueChange(activeTab);
+    }
+  }, [activeTab, onValueChange]);
+  
+  return (
+    <div className={className}>
+      {React.Children.map(children, child => {
+        if (child && (child.type === TabsList || child.type === TabsContent)) {
+          return React.cloneElement(child, { activeTab, setActiveTab });
+        }
+        return child;
+      })}
+    </div>
+  );
+};
+
+// TabsList Component
+const TabsList = ({ children, activeTab, setActiveTab, className = "" }) => {
+  return (
+    <div className={`grid grid-cols-5 w-full ${className}`}>
+      {React.Children.map(children, child => {
+        if (child && child.type === TabsTrigger) {
+          return React.cloneElement(child, { activeTab, setActiveTab });
+        }
+        return child;
+      })}
+    </div>
+  );
+};
+
+// TabsTrigger Component
+const TabsTrigger = ({ children, value, activeTab, setActiveTab }) => {
+  const isActive = activeTab === value;
+  
+  return (
+    <button
+      onClick={() => setActiveTab(value)}
+      className={`flex-1 py-3 text-sm font-medium text-center border-b-2 ${
+        isActive
+          ? value === 'all' 
+            ? 'border-indigo-500 text-indigo-600' 
+            : value === 'Scheduled' 
+              ? 'border-green-500 text-green-600'
+              : value === 'Completed'
+                ? 'border-blue-500 text-blue-600'
+                : value === 'Cancelled'
+                  ? 'border-red-500 text-red-600'
+                  : value === 'Postponed'
+                    ? 'border-yellow-500 text-yellow-600'
+                    : 'border-indigo-500 text-indigo-600'
+          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+      }`}
+    >
+      {children}
+    </button>
+  );
+};
+
+// TabsContent Component
+const TabsContent = ({ children, value, activeTab }) => {
+  if (activeTab !== value) return null;
+  
+  return (
+    <div className="mt-2">
+      {children}
+    </div>
+  );
+};
 
 // StatusCard Component
 const StatusCard = ({ title, count, icon, bgColor = 'bg-white', textColor = 'text-gray-600' }) => {
@@ -67,7 +140,7 @@ const ViewMeetingModal = ({ isOpen, onClose, meeting }) => {
 
     return (
         <Modal 
-            isOpen={isOpen} 
+            show={isOpen} 
             onClose={onClose}
             title="Meeting Details"
         >
@@ -216,7 +289,7 @@ const ViewMeetingModal = ({ isOpen, onClose, meeting }) => {
     );
 };
 
-// Meeting Form Component
+// MeetingForm Component with employee search implementation from TravelOrderModal
 const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
     const [formData, setFormData] = useState({
         title: '',
@@ -236,18 +309,108 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
     const [selectedEmployees, setSelectedEmployees] = useState([]);
     const [availableEmployees, setAvailableEmployees] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+    const [departmentFilter, setDepartmentFilter] = useState('');
+    const [filteredEmployees, setFilteredEmployees] = useState([]);
+    const [departments, setDepartments] = useState([]);
 
+    // Fetch employees and departments when modal opens
     useEffect(() => {
-        // Fetch available employees when modal opens
         if (isOpen) {
-            fetch('/meetings/get-employees')
-                .then(response => response.json())
-                .then(data => {
-                    setAvailableEmployees(data);
-                })
-                .catch(error => console.error('Error fetching employees:', error));
+            setIsLoadingEmployees(true);
+            
+            // Fetch employee data
+            axios.get('/employees', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                console.log('Employee response:', response.data);
+                if (response.data && response.data.data) {
+                    const emps = response.data.data;
+                    setAvailableEmployees(emps);
+                    setFilteredEmployees(emps);
+                    
+                    // Extract departments from employee data as fallback
+                    const uniqueDepartments = [...new Set(
+                        emps
+                            .map(e => e.Department)
+                            .filter(Boolean)
+                    )];
+                    setDepartments(uniqueDepartments);
+                    console.log(`Extracted ${uniqueDepartments.length} unique departments from employee data`);
+                } else {
+                    console.error('Unexpected response format:', response.data);
+                    setAvailableEmployees([]);
+                    setFilteredEmployees([]);
+                }
+                setIsLoadingEmployees(false);
+            })
+            .catch(error => {
+                console.error('Error fetching employees:', error);
+                setIsLoadingEmployees(false);
+                setAvailableEmployees([]);
+                setFilteredEmployees([]);
+            });
+            
+            // Also try to fetch departments separately
+            axios.get('/departments', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (response.data && response.data.data) {
+                    setDepartments(response.data.data);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching departments:', error);
+                // This is ok, we already have departments extracted from employees as fallback
+            });
         }
     }, [isOpen]);
+
+    // Filter employees based on search term and department
+    useEffect(() => {
+        // Ensure employees is an array
+        if (!Array.isArray(availableEmployees)) {
+            console.warn('availableEmployees is not an array:', availableEmployees);
+            setFilteredEmployees([]);
+            return;
+        }
+        
+        let filtered = [...availableEmployees];
+        
+        // Apply department filter if selected
+        if (departmentFilter) {
+            filtered = filtered.filter(employee => employee.Department === departmentFilter);
+        }
+        
+        // Apply search filter if provided
+        if (searchTerm.trim()) {
+            const searchTermLower = searchTerm.toLowerCase();
+            filtered = filtered.filter(employee => {
+                const firstName = (employee.Fname || '').toLowerCase();
+                const lastName = (employee.Lname || '').toLowerCase();
+                const idNo = (employee.idno || '').toLowerCase();
+                const fullName = `${firstName} ${lastName}`.toLowerCase();
+                const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+                
+                return firstName.includes(searchTermLower) || 
+                       lastName.includes(searchTermLower) || 
+                       idNo?.includes(searchTermLower) ||
+                       fullName.includes(searchTermLower) ||
+                       fullNameReversed.includes(searchTermLower);
+            });
+        }
+        
+        console.log(`Filtered employees: ${filtered.length} matches`);
+        setFilteredEmployees(filtered);
+    }, [searchTerm, departmentFilter, availableEmployees]);
 
     useEffect(() => {
         if (meeting) {
@@ -348,19 +511,18 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
         }));
     };
 
-    const filteredEmployees = availableEmployees.filter(employee => 
-        !selectedEmployees.some(selected => selected.id === employee.id) &&
-        (employee.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-         employee.department?.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    // Format employee name from Fname and Lname
+    const getEmployeeName = (employee) => {
+        return `${employee.Fname || ''} ${employee.Lname || ''}`.trim();
+    };
 
     return (
         <Modal 
-            isOpen={isOpen} 
+            show={isOpen} 
             onClose={onClose}
             title={mode === 'create' ? 'Schedule New Meeting' : 'Edit Meeting'}
         >
-            <form onSubmit={handleSubmit} className="p-4 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
                 <div className="grid grid-cols-2 gap-4">
                     {/* Basic Information */}
                     <div className="col-span-2">
@@ -547,7 +709,7 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
                             onChange={handleChange}
                         />
                     </div>
-
+                    
                     {/* Participants Section */}
                     <div className="col-span-2">
                         <h3 className="text-lg font-semibold mb-3 mt-4">Participants</h3>
@@ -555,47 +717,132 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
 
                     <div className="col-span-2">
                         <div className="border rounded-lg p-4">
-                            <div className="mb-4">
-                                <label htmlFor="searchEmployees" className="block text-sm font-medium mb-1">
-                                    Search Employees
-                                </label>
+                            <div className="mb-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {/* Search Input */}
                                 <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <svg 
+                                            xmlns="http://www.w3.org/2000/svg" 
+                                            className="h-4 w-4 text-gray-400" 
+                                            fill="none" 
+                                            viewBox="0 0 24 24" 
+                                            stroke="currentColor"
+                                        >
+                                            <path 
+                                                strokeLinecap="round" 
+                                                strokeLinejoin="round" 
+                                                strokeWidth={2} 
+                                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
+                                            />
+                                        </svg>
+                                    </div>
                                     <input
-                                        id="searchEmployees"
                                         type="text"
-                                        className="w-full p-2 border rounded border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder="Search by name or department..."
+                                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                        placeholder="Search employees by name or ID..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
+                                        disabled={isLoadingEmployees}
                                     />
-                                    {searchTerm && filteredEmployees.length > 0 && (
-                                        <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-300 max-h-60 overflow-auto">
-                                            {filteredEmployees.map(employee => (
-                                                <div
-                                                    key={employee.id}
-                                                    className="p-2 hover:bg-gray-100 cursor-pointer flex justify-between items-center"
-                                                    onClick={() => handleAddEmployee(employee)}
-                                                >
-                                                    <div>
-                                                        <div className="font-medium">{employee.name}</div>
-                                                        <div className="text-sm text-gray-500">{employee.department}</div>
-                                                    </div>
-                                                    <Button 
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0 rounded-full"
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
                                 </div>
+                                
+                                {/* Department Filter */}
+                                <div>
+    <select
+        className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+        value={departmentFilter}
+        onChange={(e) => setDepartmentFilter(e.target.value)}
+        disabled={isLoadingEmployees}
+    >
+        <option value="">All Departments</option>
+        {Array.isArray(departments) && departments.map((dept, index) => {
+            // Handle both string departments and object departments
+            const deptName = typeof dept === 'string' ? dept : dept.name || dept.code || '';
+            const deptId = typeof dept === 'string' ? dept : dept.id || index;
+            
+            return (
+                <option key={`dept-${deptId}`} value={deptName}>
+                    {deptName}
+                </option>
+            );
+        })}
+    </select>
+</div>
+                            </div>
+                            
+                            <div className="text-xs text-gray-500 mb-2">
+                                {isLoadingEmployees ? (
+                                    "Loading employees..."
+                                ) : (
+                                    filteredEmployees.length === 0 ? 
+                                        "No matching employees found" : 
+                                        filteredEmployees.length === 1 ? 
+                                            "1 employee found" : 
+                                            `${filteredEmployees.length} employees found`
+                                )}
+                                {selectedEmployees.length > 0 && 
+                                    ` - ${selectedEmployees.length} employee${selectedEmployees.length > 1 ? 's' : ''} selected`
+                                }
+                            </div>
+                            
+                            {/* Employee List */}
+                            <div className="max-h-40 overflow-y-auto border rounded-md">
+                                {isLoadingEmployees ? (
+                                    <div className="p-3 text-center text-gray-500 text-sm">
+                                        Loading employees...
+                                    </div>
+                                ) : filteredEmployees.length > 0 ? (
+                                    <div className="divide-y divide-gray-200">
+                                        {filteredEmployees.map(employee => (
+                                            <div 
+                                                key={employee.id} 
+                                                className="flex items-center p-2 hover:bg-gray-50 cursor-pointer"
+                                                onClick={() => handleAddEmployee(employee)}
+                                            >
+                                                <div className="ml-3 flex-grow">
+                                                    <div className="text-sm font-medium text-gray-900">
+                                                        {employee.Lname}, {employee.Fname} {employee.MName || ''}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 flex space-x-2">
+                                                        <span>{employee.idno || 'No ID'}</span>
+                                                        <span>•</span>
+                                                        <span>{employee.Department || 'No Dept'}</span>
+                                                        <span>•</span>
+                                                        <span>{employee.Jobtitle || 'No Title'}</span>
+                                                    </div>
+                                                </div>
+                                                <Button 
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 w-8 p-0 rounded-full"
+                                                >
+                                                    <svg 
+                                                        xmlns="http://www.w3.org/2000/svg" 
+                                                        className="h-4 w-4" 
+                                                        fill="none" 
+                                                        viewBox="0 0 24 24" 
+                                                        stroke="currentColor"
+                                                    >
+                                                        <path 
+                                                            strokeLinecap="round" 
+                                                            strokeLinejoin="round" 
+                                                            strokeWidth={2} 
+                                                            d="M12 4v16m8-8H4" 
+                                                        />
+                                                    </svg>
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="p-3 text-center text-gray-500 text-sm">
+                                        No employees found matching your criteria
+                                    </div>
+                                )}
                             </div>
 
-                            <div>
+                            <div className="mt-4">
                                 <h4 className="text-sm font-medium mb-2">Selected Participants ({selectedEmployees.length})</h4>
                                 {selectedEmployees.length > 0 ? (
                                     <div className="border rounded-md overflow-hidden">
@@ -610,8 +857,12 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
                                             <tbody className="bg-white divide-y divide-gray-200">
                                                 {selectedEmployees.map(employee => (
                                                     <tr key={employee.id}>
-                                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{employee.name}</td>
-                                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{employee.department || '-'}</td>
+                                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                            {employee.Lname}, {employee.Fname}
+                                                        </td>
+                                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                                                            {employee.Department || '-'}
+                                                        </td>
                                                         <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-medium">
                                                             <Button 
                                                                 type="button"
@@ -620,7 +871,20 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
                                                                 className="text-red-600 hover:text-red-800"
                                                                 onClick={() => handleRemoveEmployee(employee.id)}
                                                             >
-                                                                <X className="h-4 w-4" />
+                                                                <svg 
+                                                                    xmlns="http://www.w3.org/2000/svg" 
+                                                                    className="h-4 w-4" 
+                                                                    fill="none" 
+                                                                    viewBox="0 0 24 24" 
+                                                                    stroke="currentColor"
+                                                                >
+                                                                    <path 
+                                                                        strokeLinecap="round" 
+                                                                        strokeLinejoin="round" 
+                                                                        strokeWidth={2} 
+                                                                        d="M6 18L18 6M6 6l12 12" 
+                                                                    />
+                                                                </svg>
                                                             </Button>
                                                         </td>
                                                     </tr>
@@ -843,7 +1107,7 @@ const MeetingList = ({ meetings, onEdit, onDelete, onView, onMarkCompleted, onMa
     );
 };
 
-const MeetingPage = ({ meetings: initialMeetings, counts, currentStatus = 'all', flash }) => {
+const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = 'all', flash }) => {
     const { auth } = usePage().props;
     const [filteredMeetings, setFilteredMeetings] = useState(initialMeetings || []);
     const [searchTerm, setSearchTerm] = useState('');
@@ -859,6 +1123,15 @@ const MeetingPage = ({ meetings: initialMeetings, counts, currentStatus = 'all',
         confirmVariant: 'destructive',
         onConfirm: () => {}
     });
+    
+    // Fix: Properly initialize meetingCounts with defaults in case counts is undefined
+    const meetingCounts = {
+        total: (counts?.total !== undefined) ? counts.total : (initialMeetings?.length || 0),
+        scheduled: (counts?.scheduled !== undefined) ? counts.scheduled : (initialMeetings?.filter(m => m?.status === 'Scheduled')?.length || 0),
+        completed: (counts?.completed !== undefined) ? counts.completed : (initialMeetings?.filter(m => m?.status === 'Completed')?.length || 0),
+        cancelled: (counts?.cancelled !== undefined) ? counts.cancelled : (initialMeetings?.filter(m => m?.status === 'Cancelled')?.length || 0),
+        postponed: (counts?.postponed !== undefined) ? counts.postponed : (initialMeetings?.filter(m => m?.status === 'Postponed')?.length || 0)
+    };
     
     const [activeTab, setActiveTab] = useState(currentStatus || 'all');
 
@@ -882,6 +1155,7 @@ const MeetingPage = ({ meetings: initialMeetings, counts, currentStatus = 'all',
         
         setFilteredMeetings(filtered);
     }, [searchTerm, initialMeetings, activeTab]);
+
 
     const handleView = (meeting) => {
         setSelectedMeeting(meeting);
@@ -1008,38 +1282,37 @@ const MeetingPage = ({ meetings: initialMeetings, counts, currentStatus = 'all',
                             </div>
                         </div>
                         
-                        {/* Status Cards */}
+                        {/* Status Cards - fixed to use meetingCounts instead of counts */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                             <StatusCard 
                                 title="Total Meetings" 
-                                count={counts.total}
+                                count={meetingCounts.total}
                                 icon={<Calendar className="h-6 w-6 text-indigo-600" />}
                                 bgColor="bg-white"
                                 textColor="text-gray-600"
                             />
                             <StatusCard 
                                 title="Scheduled" 
-                                count={counts.scheduled}
+                                count={meetingCounts.scheduled}
                                 icon={<Clock className="h-6 w-6 text-green-600" />}
                                 bgColor="bg-white"
                                 textColor="text-gray-600"
                             />
                             <StatusCard 
                                 title="Completed" 
-                                count={counts.completed}
+                                count={meetingCounts.completed}
                                 icon={<CheckCircle className="h-6 w-6 text-blue-600" />}
                                 bgColor="bg-white" 
                                 textColor="text-gray-600"
                             />
                             <StatusCard 
                                 title="Cancelled" 
-                                count={counts.cancelled}
+                                count={meetingCounts.cancelled}
                                 icon={<XCircle className="h-6 w-6 text-red-600" />}
                                 bgColor="bg-white"
                                 textColor="text-gray-600"
                             />
                         </div>
-
                         <div className="flex gap-4 mb-6">
                             <div className="flex-1 relative">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
