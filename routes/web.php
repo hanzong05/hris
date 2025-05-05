@@ -26,6 +26,8 @@ use App\Http\Controllers\ComplaintController;
 use App\Http\Controllers\WarningController;
 use App\Http\Controllers\TerminationController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\LineController;
+use App\Http\Controllers\SectionController;
 
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
