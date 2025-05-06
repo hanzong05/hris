@@ -7,7 +7,7 @@ use App\Models\Employee;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
-class MeetingsController  extends Controller
+class MeetingsController extends Controller
 {
     public function index(Request $request)
     {
@@ -17,6 +17,7 @@ class MeetingsController  extends Controller
             ->when($status !== 'all', function ($query) use ($status) {
                 return $query->where('status', $status);
             })
+            ->with('participants') // Include participants data
             ->withCount('participants')
             ->orderBy('start_time', 'desc')
             ->get();
@@ -26,13 +27,42 @@ class MeetingsController  extends Controller
             'scheduled' => Meeting::where('status', 'Scheduled')->count(),
             'completed' => Meeting::where('status', 'Completed')->count(),
             'cancelled' => Meeting::where('status', 'Cancelled')->count(),
+            'postponed' => Meeting::where('status', 'Postponed')->count(),
         ];
 
-        return Inertia::render('Meeting/MeetingPage', [
+        return Inertia::render('MeetingAndEvents/Meetings', [
             'meetings' => $meetings,
             'counts' => $counts,
             'currentStatus' => $status,
         ]);
+    }
+
+    /**
+     * Get a list of meetings for API/AJAX requests
+     */
+    public function list(Request $request)
+    {
+        $status = $request->input('status', 'all');
+        
+        $meetings = Meeting::query()
+            ->when($status !== 'all', function ($query) use ($status) {
+                return $query->where('status', $status);
+            })
+            ->when($request->has('search') && !empty($request->input('search')), function ($query) use ($request) {
+                $searchTerm = $request->input('search');
+                return $query->where(function($q) use ($searchTerm) {
+                    $q->where('title', 'like', "%{$searchTerm}%")
+                      ->orWhere('location', 'like', "%{$searchTerm}%")
+                      ->orWhere('organizer', 'like', "%{$searchTerm}%")
+                      ->orWhere('department', 'like', "%{$searchTerm}%");
+                });
+            })
+            ->with('participants')
+            ->withCount('participants')
+            ->orderBy('start_time', 'desc')
+            ->get();
+        
+        return response()->json(['meetings' => $meetings]);
     }
 
     public function store(Request $request)
@@ -65,8 +95,10 @@ class MeetingsController  extends Controller
         return redirect()->route('meetings.index')->with('message', 'Meeting created successfully');
     }
 
-    public function update(Request $request, Meeting $meeting)
+    public function update(Request $request, $id)
     {
+        $meeting = Meeting::findOrFail($id);
+        
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'agenda' => 'nullable|string',
@@ -95,44 +127,40 @@ class MeetingsController  extends Controller
         return redirect()->route('meetings.index')->with('message', 'Meeting updated successfully');
     }
 
-    public function destroy(Meeting $meeting)
+    public function destroy($id)
     {
+        $meeting = Meeting::findOrFail($id);
         $meeting->delete();
         return redirect()->route('meetings.index')->with('message', 'Meeting deleted successfully');
     }
 
-    public function markCompleted(Meeting $meeting)
+    public function markCompleted($id)
     {
+        $meeting = Meeting::findOrFail($id);
         $meeting->update(['status' => 'Completed']);
         return redirect()->back()->with('message', 'Meeting marked as completed');
     }
 
-    public function markCancelled(Meeting $meeting)
+    public function markCancelled($id)
     {
+        $meeting = Meeting::findOrFail($id);
         $meeting->update(['status' => 'Cancelled']);
         return redirect()->back()->with('message', 'Meeting marked as cancelled');
     }
 
-    public function markScheduled(Meeting $meeting)
+    public function markScheduled($id)
     {
+        $meeting = Meeting::findOrFail($id);
         $meeting->update(['status' => 'Scheduled']);
         return redirect()->back()->with('message', 'Meeting marked as scheduled');
     }
 
-    public function getEmployees()
+    /**
+     * Export meetings to Excel (placeholder method)
+     */
+    public function export(Request $request)
     {
-        $employees = Employee::select('id', 'Fname', 'Lname', 'Department')
-            ->where('JobStatus', 'Active')
-            ->orderBy('Lname')
-            ->get()
-            ->map(function ($employee) {
-                return [
-                    'id' => $employee->id,
-                    'name' => "{$employee->Lname}, {$employee->Fname}",
-                    'department' => $employee->Department,
-                ];
-            });
-
-        return response()->json($employees);
+        // Implement Excel export functionality
+        return response()->json(['message' => 'Export functionality not implemented yet']);
     }
 }

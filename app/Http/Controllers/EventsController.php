@@ -507,7 +507,15 @@ class EventsController extends Controller
         
         return $response;
     }
+    public function debug()
+{
+    $events = Event::with(['attendees'])->get();
     
+    return response()->json([
+        'events' => $events,
+        'count' => $events->count()
+    ]);
+}
     /**
      * Get a list of events for other components
      */

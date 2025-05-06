@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Sidebar from '@/Components/Sidebar';
-import axios from 'axios'; // Add Axios import
+import axios from 'axios';
+import Swal from 'sweetalert2'; // Import SweetAlert
 import { 
     Plus, 
     Search, 
@@ -353,6 +354,14 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
                 setIsLoadingEmployees(false);
                 setAvailableEmployees([]);
                 setFilteredEmployees([]);
+                
+                // Show SweetAlert error notification
+                Swal.fire({
+                    title: 'Error!',
+                    text: 'Failed to load employees. Please try again.',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
             });
             
             // Also try to fetch departments separately
@@ -448,35 +457,108 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
         }
     }, [meeting]);
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        
-        // Clone formData to include participants
-        const submitData = {
-            ...formData,
-            participants: selectedEmployees.map(emp => emp.id)
-        };
-        
-        if (mode === 'create') {
-            router.post('/meetings', submitData, {
-                onError: (errors) => {
-                    setErrors(errors);
-                },
-                onSuccess: () => {
-                    onClose();
-                },
-            });
-        } else {
-            router.put(`/meetings/${meeting.id}`, submitData, {
-                onError: (errors) => {
-                    setErrors(errors);
-                },
-                onSuccess: () => {
-                    onClose();
-                },
-            });
-        }
+  // In your MeetingForm component, replace the existing SweetAlert success notification:
+
+// For the handleSubmit function in MeetingForm component
+const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Clone formData to include participants
+    const submitData = {
+        ...formData,
+        participants: selectedEmployees.map(emp => emp.id)
     };
+    
+    if (mode === 'create') {
+        router.post('/meetings', submitData, {
+            onError: (errors) => {
+                setErrors(errors);
+                
+                // Show SweetAlert error toast notification
+                Swal.fire({
+                    toast: true,
+                    position: 'top',
+                    icon: 'error',
+                    title: 'Please check the form for errors.',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true
+                });
+            },
+            onSuccess: () => {
+                onClose();
+                
+                // Show SweetAlert toast notification
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true,
+                    didOpen: (toast) => {
+                        toast.addEventListener('mouseenter', Swal.stopTimer)
+                        toast.addEventListener('mouseleave', Swal.resumeTimer)
+                    }
+                });
+                
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: 'Meeting scheduled successfully.',
+                    iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                    customClass: {
+                        popup: 'px-6 py-4 rounded-lg shadow-md',
+                        title: 'text-gray-700 font-medium'
+                    }
+                });
+            },
+        });
+    } else {
+        router.put(`/meetings/${meeting.id}`, submitData, {
+            onError: (errors) => {
+                setErrors(errors);
+                
+                // Show SweetAlert error toast notification
+                Swal.fire({
+                    toast: true,
+                    position: 'top',
+                    icon: 'error',
+                    title: 'Please check the form for errors.',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true
+                });
+            },
+            onSuccess: () => {
+                onClose();
+                
+                // Show SweetAlert toast notification
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true,
+                    didOpen: (toast) => {
+                        toast.addEventListener('mouseenter', Swal.stopTimer)
+                        toast.addEventListener('mouseleave', Swal.resumeTimer)
+                    }
+                });
+                
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: 'Meeting updated successfully.',
+                    iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                    customClass: {
+                        popup: 'px-6 py-4 rounded-lg shadow-md',
+                        title: 'text-gray-700 font-medium'
+                    }
+                });
+            },
+        });
+    }
+};
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -499,16 +581,55 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
                 ...prev,
                 participants: [...prev.participants, employee.id]
             }));
+            
+            // Show SweetAlert toast notification
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true,
+                didOpen: (toast) => {
+                    toast.addEventListener('mouseenter', Swal.stopTimer)
+                    toast.addEventListener('mouseleave', Swal.resumeTimer)
+                }
+            });
+            
+            Toast.fire({
+                icon: 'success',
+                title: `${employee.Fname} ${employee.Lname} added to participants`
+            });
         }
         setSearchTerm('');
     };
 
     const handleRemoveEmployee = (employeeId) => {
+        const employeeToRemove = selectedEmployees.find(e => e.id === employeeId);
         setSelectedEmployees(selectedEmployees.filter(e => e.id !== employeeId));
         setFormData(prev => ({
             ...prev,
             participants: prev.participants.filter(id => id !== employeeId)
         }));
+        
+        if (employeeToRemove) {
+            // Show SweetAlert toast notification
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true,
+                didOpen: (toast) => {
+                    toast.addEventListener('mouseenter', Swal.stopTimer)
+                    toast.addEventListener('mouseleave', Swal.resumeTimer)
+                }
+            });
+            
+            Toast.fire({
+                icon: 'info',
+                title: `${employeeToRemove.Fname} ${employeeToRemove.Lname} removed from participants`
+            });
+        }
     };
 
     // Format employee name from Fname and Lname
@@ -748,26 +869,26 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
                                 
                                 {/* Department Filter */}
                                 <div>
-    <select
-        className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-        value={departmentFilter}
-        onChange={(e) => setDepartmentFilter(e.target.value)}
-        disabled={isLoadingEmployees}
-    >
-        <option value="">All Departments</option>
-        {Array.isArray(departments) && departments.map((dept, index) => {
-            // Handle both string departments and object departments
-            const deptName = typeof dept === 'string' ? dept : dept.name || dept.code || '';
-            const deptId = typeof dept === 'string' ? dept : dept.id || index;
-            
-            return (
-                <option key={`dept-${deptId}`} value={deptName}>
-                    {deptName}
-                </option>
-            );
-        })}
-    </select>
-</div>
+                                    <select
+                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                        value={departmentFilter}
+                                        onChange={(e) => setDepartmentFilter(e.target.value)}
+                                        disabled={isLoadingEmployees}
+                                    >
+                                        <option value="">All Departments</option>
+                                        {Array.isArray(departments) && departments.map((dept, index) => {
+                                            // Handle both string departments and object departments
+                                            const deptName = typeof dept === 'string' ? dept : dept.name || dept.code || '';
+                                            const deptId = typeof dept === 'string' ? dept : dept.id || index;
+                                            
+                                            return (
+                                                <option key={`dept-${deptId}`} value={deptName}>
+                                                    {deptName}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
                             </div>
                             
                             <div className="text-xs text-gray-500 mb-2">
@@ -1108,8 +1229,17 @@ const MeetingList = ({ meetings, onEdit, onDelete, onView, onMarkCompleted, onMa
 };
 
 const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = 'all', flash }) => {
-    const { auth } = usePage().props;
-    const [filteredMeetings, setFilteredMeetings] = useState(initialMeetings || []);
+    console.log('Initial meetings received:', initialMeetings);
+    console.log('Current status:', currentStatus);
+    
+    // Using usePage() to get the auth user from the global Inertia page props
+    const { auth: pageAuth } = usePage().props;
+    const user = pageAuth?.user || {};
+    
+    // Ensure initialMeetings is always an array
+    const safeMeetings = Array.isArray(initialMeetings) ? initialMeetings : [];
+    
+    const [filteredMeetings, setFilteredMeetings] = useState(safeMeetings);
     const [searchTerm, setSearchTerm] = useState('');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState(null);
@@ -1124,37 +1254,105 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
         onConfirm: () => {}
     });
     
+    // Add a ref to track initialMeetings changes to avoid loops
+    const previousMeetingsRef = useRef(null);
+    
     // Fix: Properly initialize meetingCounts with defaults in case counts is undefined
     const meetingCounts = {
-        total: (counts?.total !== undefined) ? counts.total : (initialMeetings?.length || 0),
-        scheduled: (counts?.scheduled !== undefined) ? counts.scheduled : (initialMeetings?.filter(m => m?.status === 'Scheduled')?.length || 0),
-        completed: (counts?.completed !== undefined) ? counts.completed : (initialMeetings?.filter(m => m?.status === 'Completed')?.length || 0),
-        cancelled: (counts?.cancelled !== undefined) ? counts.cancelled : (initialMeetings?.filter(m => m?.status === 'Cancelled')?.length || 0),
-        postponed: (counts?.postponed !== undefined) ? counts.postponed : (initialMeetings?.filter(m => m?.status === 'Postponed')?.length || 0)
+        total: (counts?.total !== undefined) ? counts.total : (safeMeetings.length || 0),
+        scheduled: (counts?.scheduled !== undefined) ? counts.scheduled : (safeMeetings.filter(m => m?.status === 'Scheduled')?.length || 0),
+        completed: (counts?.completed !== undefined) ? counts.completed : (safeMeetings.filter(m => m?.status === 'Completed')?.length || 0),
+        cancelled: (counts?.cancelled !== undefined) ? counts.cancelled : (safeMeetings.filter(m => m?.status === 'Cancelled')?.length || 0),
+        postponed: (counts?.postponed !== undefined) ? counts.postponed : (safeMeetings.filter(m => m?.status === 'Postponed')?.length || 0)
     };
     
     const [activeTab, setActiveTab] = useState(currentStatus || 'all');
+    
+    // Fix: Tracking if we've already fetched meetings via API
+    const hasAttemptedFetch = useRef(false);
 
+    // If we don't have meetings data, fetch it directly - but only once
     useEffect(() => {
-        let filtered = initialMeetings || [];
-        
-        // Filter by status tab
-        if (activeTab !== 'all') {
-            filtered = filtered.filter(meeting => meeting.status === activeTab);
+        // This check prevents the effect from running repeatedly
+        if ((!initialMeetings || !Array.isArray(initialMeetings) || initialMeetings.length === 0) && !hasAttemptedFetch.current) {
+            console.log('No meetings data from props, fetching directly...');
+            hasAttemptedFetch.current = true; // Mark that we've attempted a fetch
+            
+            axios.get('/meetings/list', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                console.log('Direct API response:', response.data);
+                if (response.data && response.data.meetings && Array.isArray(response.data.meetings)) {
+                    setFilteredMeetings(response.data.meetings);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching meetings via API:', error);
+            });
         }
+    }, []); // Empty dependency array to run only once
+
+    // Fix: Improved filtering effect with better dependency tracking
+    useEffect(() => {
+        // Check if initialMeetings has actually changed
+        const meetingsChanged = JSON.stringify(previousMeetingsRef.current) !== JSON.stringify(safeMeetings);
         
-        // Filter by search term
-        if (searchTerm) {
-            filtered = filtered.filter(meeting => 
-                meeting.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                meeting.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                meeting.organizer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                meeting.department?.toLowerCase().includes(searchTerm.toLowerCase())
-            );
+        if (meetingsChanged || searchTerm !== '' || activeTab !== 'all') {
+            console.log('Filtering meetings based on:', { searchTerm, activeTab });
+            
+            let filtered = [...safeMeetings];
+            
+            // Filter by status tab
+            if (activeTab !== 'all') {
+                filtered = filtered.filter(meeting => meeting.status === activeTab);
+            }
+            
+            // Filter by search term
+            if (searchTerm) {
+                filtered = filtered.filter(meeting => 
+                    (meeting.title && meeting.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (meeting.location && meeting.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (meeting.organizer && meeting.organizer.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (meeting.department && meeting.department.toLowerCase().includes(searchTerm.toLowerCase()))
+                );
+            }
+            
+            setFilteredMeetings(filtered);
+            
+            // Update the ref to current meetings
+            previousMeetingsRef.current = safeMeetings;
         }
-        
-        setFilteredMeetings(filtered);
-    }, [searchTerm, initialMeetings, activeTab]);
+    }, [searchTerm, activeTab]); // Remove safeMeetings from dependencies
+    
+    // Add a separate effect to update filteredMeetings when initialMeetings changes
+    useEffect(() => {
+        if (JSON.stringify(previousMeetingsRef.current) !== JSON.stringify(safeMeetings)) {
+            console.log('Meetings data changed, updating filtered meetings');
+            previousMeetingsRef.current = safeMeetings;
+            
+            let filtered = [...safeMeetings];
+            
+            // Apply existing filters
+            if (activeTab !== 'all') {
+                filtered = filtered.filter(meeting => meeting.status === activeTab);
+            }
+            
+            if (searchTerm) {
+                filtered = filtered.filter(meeting => 
+                    (meeting.title && meeting.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (meeting.location && meeting.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (meeting.organizer && meeting.organizer.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (meeting.department && meeting.department.toLowerCase().includes(searchTerm.toLowerCase()))
+                );
+            }
+            
+            setFilteredMeetings(filtered);
+        }
+    }, [safeMeetings]);
 
 
     const handleView = (meeting) => {
@@ -1170,11 +1368,54 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
             confirmText: 'Delete',
             confirmVariant: 'destructive',
             onConfirm: () => {
-                router.delete(`/meetings/${id}`);
-                setConfirmModal({...confirmModal, isOpen: false});
+                // Use the POST method with _method parameter for method spoofing
+                router.post(`/meetings/${id}`, {
+                    _method: 'DELETE' // This tells Laravel to treat it as a DELETE request
+                }, {
+                    onSuccess: () => {
+                        setConfirmModal({...confirmModal, isOpen: false});
+                        
+                        // Show toast notification on the right side
+                        const Toast = Swal.mixin({
+                            toast: true,
+                            position: 'top-end', // Changed from 'top' to 'top-end' for right side positioning
+                            showConfirmButton: false,
+                            timer: 3000,
+                            timerProgressBar: true,
+                            didOpen: (toast) => {
+                                toast.addEventListener('mouseenter', Swal.stopTimer)
+                                toast.addEventListener('mouseleave', Swal.resumeTimer)
+                            }
+                        });
+                        
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'Meeting deleted successfully',
+                            iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                            customClass: {
+                                popup: 'px-6 py-4 rounded-lg shadow-md flex items-start',
+                                title: 'text-gray-700 ml-3 font-medium'
+                            }
+                        });
+                    },
+                    onError: (error) => {
+                        console.error('Delete failed:', error);
+                        
+                        // Error toast also on the right side
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end', // Right side positioning
+                            icon: 'error',
+                            title: 'Failed to delete meeting',
+                            showConfirmButton: false,
+                            timer: 3000
+                        });
+                    }
+                });
             }
         });
     };
+    
     
     const handleMarkCompleted = (id) => {
         setConfirmModal({
@@ -1189,63 +1430,172 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
                     preserveScroll: true,
                     onSuccess: () => {
                         setConfirmModal({...confirmModal, isOpen: false});
+                        
+                        // Show toast notification on the right side
+                        const Toast = Swal.mixin({
+                            toast: true,
+                            position: 'top-end', // Right side positioning
+                            showConfirmButton: false,
+                            timer: 3000,
+                            timerProgressBar: true,
+                            didOpen: (toast) => {
+                                toast.addEventListener('mouseenter', Swal.stopTimer)
+                                toast.addEventListener('mouseleave', Swal.resumeTimer)
+                            }
+                        });
+                        
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'Meeting marked as completed',
+                            iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                            customClass: {
+                                popup: 'px-6 py-4 rounded-lg shadow-md flex items-start',
+                                title: 'text-gray-700 ml-3 font-medium'
+                            }
+                        });
+                    },
+                    onError: () => {
+                        // Error toast also on the right side
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end', // Right side positioning
+                            icon: 'error',
+                            title: 'Failed to update meeting status',
+                            showConfirmButton: false,
+                            timer: 3000
+                        });
                     }
                 });
             }
         });
     };
 
-    const handleMarkCancelled = (id) => {
-        setConfirmModal({
-            isOpen: true,
-            title: 'Cancel Meeting',
-            message: 'Are you sure you want to cancel this meeting?',
-            confirmText: 'Cancel Meeting',
-            confirmVariant: 'destructive',
-            onConfirm: () => {
-                router.post(`/meetings/${id}/mark-cancelled`, {}, {
-                    preserveState: true,
-                    preserveScroll: true,
-                    onSuccess: () => {
-                        setConfirmModal({...confirmModal, isOpen: false});
-                    }
-                });
-            }
-        });
-    };
-
-    const handleMarkScheduled = (id) => {
-        setConfirmModal({
-            isOpen: true,
-            title: 'Reschedule Meeting',
-            message: 'Are you sure you want to mark this meeting as scheduled?',
-            confirmText: 'Schedule',
-            confirmVariant: 'default',
-            onConfirm: () => {
-                router.post(`/meetings/${id}/mark-scheduled`, {}, {
-                    preserveState: true,
-                    preserveScroll: true,
-                    onSuccess: () => {
-                        setConfirmModal({...confirmModal, isOpen: false});
-                    }
-                });
-            }
-        });
-    };
-    
+ // Update the handleMarkCancelled function:
+const handleMarkCancelled = (id) => {
+    setConfirmModal({
+        isOpen: true,
+        title: 'Cancel Meeting',
+        message: 'Are you sure you want to cancel this meeting?',
+        confirmText: 'Cancel Meeting',
+        confirmVariant: 'destructive',
+        onConfirm: () => {
+            router.post(`/meetings/${id}/mark-cancelled`, {}, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    setConfirmModal({...confirmModal, isOpen: false});
+                    
+                    // Show toast notification
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'top',
+                        showConfirmButton: false,
+                        timer: 3000,
+                        timerProgressBar: true,
+                        didOpen: (toast) => {
+                            toast.addEventListener('mouseenter', Swal.stopTimer)
+                            toast.addEventListener('mouseleave', Swal.resumeTimer)
+                        }
+                    });
+                    
+                    Toast.fire({
+                        icon: 'success',
+                        title: `Meeting cancelled successfully`,
+                        iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                        customClass: {
+                            popup: 'px-6 py-4 rounded-lg shadow-md flex items-start',
+                            title: 'text-gray-700 ml-3 font-medium'
+                        }
+                    });
+                },
+                onError: () => {
+                    // Error toast
+                    Swal.fire({
+                        toast: true,
+                        position: 'top',
+                        icon: 'error',
+                        title: 'Failed to cancel meeting',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                }
+            });
+        }
+    });
+};
+   // Update the handleMarkScheduled function
+   const handleMarkScheduled = (id) => {
+    setConfirmModal({
+        isOpen: true,
+        title: 'Reschedule Meeting',
+        message: 'Are you sure you want to mark this meeting as scheduled?',
+        confirmText: 'Schedule',
+        confirmVariant: 'default',
+        onConfirm: () => {
+            router.post(`/meetings/${id}/mark-scheduled`, {}, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    setConfirmModal({...confirmModal, isOpen: false});
+                    
+                    // Show toast notification
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'top',
+                        showConfirmButton: false,
+                        timer: 3000,
+                        timerProgressBar: true,
+                        didOpen: (toast) => {
+                            toast.addEventListener('mouseenter', Swal.stopTimer)
+                            toast.addEventListener('mouseleave', Swal.resumeTimer)
+                        }
+                    });
+                    
+                    Toast.fire({
+                        icon: 'success',
+                        title: `Meeting rescheduled successfully`,
+                        iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                        customClass: {
+                            popup: 'px-6 py-4 rounded-lg shadow-md flex items-start',
+                            title: 'text-gray-700 ml-3 font-medium'
+                        }
+                    });
+                },
+                onError: () => {
+                    // Error toast
+                    Swal.fire({
+                        toast: true,
+                        position: 'top',
+                        icon: 'error',
+                        title: 'Failed to reschedule meeting',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                }
+            });
+        }
+    });
+};
+    // Fix: Prevent unnecessary router calls
     const handleTabChange = (value) => {
-        setActiveTab(value);
-        
-        // Use Inertia's visit instead of router.get to prevent full page reload
-        router.visit(`/meetings?status=${value}`, {
-            preserveState: true,
-            preserveScroll: true,
-            only: ['meetings', 'currentStatus']
-        });
+        if (value !== activeTab) {
+            setActiveTab(value);
+            
+            // Debounce the router call to prevent rapid state changes
+            const timeoutId = setTimeout(() => {
+                router.visit(`/meetings?status=${value}`, {
+                    preserveState: true,
+                    preserveScroll: true,
+                    only: ['meetings', 'currentStatus']
+                });
+            }, 300);
+            
+            return () => clearTimeout(timeoutId);
+        }
     };
 
     return (
-        <AuthenticatedLayout user={auth.user}>
+        <AuthenticatedLayout user={user}>
             <Head title="Meeting Management" />
             <div className="flex min-h-screen bg-gray-50/50">
                 <Sidebar />
@@ -1282,7 +1632,7 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
                             </div>
                         </div>
                         
-                        {/* Status Cards - fixed to use meetingCounts instead of counts */}
+                        {/* Status Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                             <StatusCard 
                                 title="Total Meetings" 

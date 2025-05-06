@@ -30,6 +30,8 @@ use App\Http\Controllers\LineController;
 use App\Http\Controllers\SectionController;
 use App\Http\Controllers\TrainingsController;
 use App\Http\Controllers\MeetingsController; 
+use App\Http\Controllers\EventsController; 
+
 
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -515,18 +517,37 @@ Route::middleware(['role:superadmin,hrd'])->group(function () {
     Route::delete('/travel/{id}', [TravelController::class, 'destroy'])->name('travel.destroy');
     Route::get('/travel/export', [TravelController::class, 'export'])->name('travel.export');
 });
-
 // Add this route to your existing middleware group for meetings
 Route::middleware(['auth', 'verified', 'role:superadmin,hrd'])->group(function () {
     // Existing routes...
     
-    // Meetings Route - matches your JSX filename
     Route::get('/meetings', function () {
+        $status = request()->input('status', 'all');
+        
+        $meetings = \App\Models\Meeting::query()
+            ->when($status !== 'all', function ($query) use ($status) {
+                return $query->where('status', $status);
+            })
+            ->with('participants')
+            ->withCount('participants')
+            ->orderBy('start_time', 'desc')
+            ->get();
+        
+        $counts = [
+            'total' => \App\Models\Meeting::count(),
+            'scheduled' => \App\Models\Meeting::where('status', 'Scheduled')->count(),
+            'completed' => \App\Models\Meeting::where('status', 'Completed')->count(),
+            'cancelled' => \App\Models\Meeting::where('status', 'Cancelled')->count(),
+            'postponed' => \App\Models\Meeting::where('status', 'Postponed')->count(),
+        ];
+        
         return Inertia::render('MeetingAndEvents/Meetings', [
+            'meetings' => $meetings,
+            'counts' => $counts,
+            'currentStatus' => $status,
             'auth' => ['user' => Auth::user()]
         ]);
     })->name('meetings.index');
-    
     // API routes for Meetings
     Route::get('/meetings/list', [MeetingsController::class, 'list'])
         ->name('meetings.list');
@@ -536,30 +557,27 @@ Route::middleware(['auth', 'verified', 'role:superadmin,hrd'])->group(function (
         ->name('meetings.update');
     Route::delete('/meetings/{id}', [MeetingsController::class, 'destroy'])
         ->name('meetings.destroy');
+    Route::post('/meetings/{id}/mark-completed', [MeetingsController::class, 'markCompleted'])
+        ->name('meetings.mark-completed');
+    Route::post('/meetings/{id}/mark-cancelled', [MeetingsController::class, 'markCancelled'])
+        ->name('meetings.mark-cancelled');
+    Route::post('/meetings/{id}/mark-scheduled', [MeetingsController::class, 'markScheduled'])
+        ->name('meetings.mark-scheduled');
     Route::get('/meetings/export', [MeetingsController::class, 'export'])
         ->name('meetings.export');
-        Route::get('/api/employees', [EmployeeController::class, 'getEmployeesForSelect'])
-    ->name('api.employees');
+    Route::get('/api/employees', [EmployeeController::class, 'getEmployeesForSelect'])
+        ->name('api.employees');
 
-    Route::get('/events', function () {
-        return Inertia::render('MeetingAndEvents/Events', [
-            'auth' => ['user' => Auth::user()]
-        ]);
-    })->name('events.index');
-    
-    // API routes for Events
-    Route::get('/events/list', [EventsController::class, 'list'])
-        ->name('events.list');
-    Route::post('/events', [EventsController::class, 'store'])
-        ->name('events.store');
-    Route::put('/events/{id}', [EventsController::class, 'update'])
-        ->name('events.update');
-    Route::delete('/events/{id}', [EventsController::class, 'destroy'])
-        ->name('events.destroy');
-    Route::post('/events/{id}/status', [EventsController::class, 'updateStatus'])
-        ->name('events.updateStatus');
-    Route::get('/events/export', [EventsController::class, 'export'])
-        ->name('events.export');
+    Route::get('/events', [EventsController::class, 'index'])->name('events.index');
+
+    // The rest of your routes are fine:
+    Route::get('/events/debug', [EventsController::class, 'debug'])->name('events.debug');
+    Route::get('/events/list', [EventsController::class, 'list'])->name('events.list');
+    Route::post('/events', [EventsController::class, 'store'])->name('events.store');
+    Route::put('/events/{id}', [EventsController::class, 'update'])->name('events.update');
+    Route::delete('/events/{id}', [EventsController::class, 'destroy'])->name('events.destroy');
+    Route::post('/events/{id}/status', [EventsController::class, 'updateStatus'])->name('events.updateStatus');
+    Route::get('/events/export', [EventsController::class, 'export'])->name('events.export');
 });
 // Include additional authentication routes
 require __DIR__.'/auth.php';
