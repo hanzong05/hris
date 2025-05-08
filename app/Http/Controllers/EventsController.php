@@ -562,4 +562,67 @@ class EventsController extends Controller
             'events' => $events
         ]);
     }
+    /**
+ * Reschedule an event
+ */
+public function reschedule(Request $request, $id)
+{
+    $validator = Validator::make($request->all(), [
+        'start_time' => 'required|date',
+        'end_time' => 'required|date|after:start_time',
+    ]);
+
+    if ($validator->fails()) {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'errors' => $validator->errors()
+            ], 422);
+        }
+        
+        return redirect()->back()
+            ->withErrors($validator)
+            ->withInput();
+    }
+
+    try {
+        $event = Event::findOrFail($id);
+        
+        // Update the event's time and set status to Scheduled
+        $event->update([
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
+            'status' => 'Scheduled',
+            'notes' => $event->notes . "\n\n" . now()->format('Y-m-d H:i') . " - Event rescheduled to: " . $request->start_time . " - " . $request->end_time,
+        ]);
+        
+        // TODO: Notify attendees of the schedule change (optional)
+        // You can add notification logic here if needed
+        
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Event rescheduled successfully',
+                'event' => $event->fresh(['attendees'])
+            ]);
+        }
+        
+        return redirect()->route('events.index')->with('message', 'Event rescheduled successfully');
+        
+    } catch (\Exception $e) {
+        Log::error('Failed to reschedule event', [
+            'id' => $id,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        if ($request->expectsJson()) {
+            return response()->json([
+                'error' => 'Failed to reschedule event: ' . $e->getMessage()
+            ], 500);
+        }
+        
+        return redirect()->back()
+            ->with('error', 'Failed to reschedule event: ' . $e->getMessage())
+            ->withInput();
+    }
+}
 }

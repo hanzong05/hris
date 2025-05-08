@@ -55,6 +55,16 @@ const Tabs = ({ children, defaultValue, className = "", onValueChange }) => {
     </div>
   );
 };
+const handleReschedule = (meeting) => {
+    console.log('Rescheduling meeting:', meeting);
+    // First set the selected meeting
+    setSelectedMeeting(meeting);
+    // Then open the modal in the next render cycle to ensure meeting is set
+    setTimeout(() => {
+        setRescheduleModalOpen(true);
+        console.log('Modal should be open:', true);
+    }, 10);
+};
 
 // TabsList Component
 const TabsList = ({ children, activeTab, setActiveTab, className = "" }) => {
@@ -458,7 +468,6 @@ const MeetingForm = ({ isOpen, onClose, meeting = null, mode = 'create' }) => {
     }, [meeting]);
 
   // In your MeetingForm component, replace the existing SweetAlert success notification:
-
 // For the handleSubmit function in MeetingForm component
 const handleSubmit = (e) => {
     e.preventDefault();
@@ -477,7 +486,7 @@ const handleSubmit = (e) => {
                 // Show SweetAlert error toast notification
                 Swal.fire({
                     toast: true,
-                    position: 'top',
+                    position: 'top-end',
                     icon: 'error',
                     title: 'Please check the form for errors.',
                     showConfirmButton: false,
@@ -491,7 +500,7 @@ const handleSubmit = (e) => {
                 // Show SweetAlert toast notification
                 const Toast = Swal.mixin({
                     toast: true,
-                    position: 'top',
+                    position: 'top-end',
                     showConfirmButton: false,
                     timer: 3000,
                     timerProgressBar: true,
@@ -514,14 +523,18 @@ const handleSubmit = (e) => {
             },
         });
     } else {
-        router.put(`/meetings/${meeting.id}`, submitData, {
+        // For edit mode, use POST with _method: 'PUT' instead of direct PUT
+        router.post(`/meetings/${meeting.id}`, {
+            ...submitData,
+            _method: 'PUT'  // Add method spoofing for Laravel compatibility
+        }, {
             onError: (errors) => {
                 setErrors(errors);
                 
                 // Show SweetAlert error toast notification
                 Swal.fire({
                     toast: true,
-                    position: 'top',
+                    position: 'top-end',
                     icon: 'error',
                     title: 'Please check the form for errors.',
                     showConfirmButton: false,
@@ -535,7 +548,7 @@ const handleSubmit = (e) => {
                 // Show SweetAlert toast notification
                 const Toast = Swal.mixin({
                     toast: true,
-                    position: 'top',
+                    position: 'top-end',
                     showConfirmButton: false,
                     timer: 3000,
                     timerProgressBar: true,
@@ -1041,9 +1054,182 @@ const handleSubmit = (e) => {
         </Modal>
     );
 };
+// RescheduleModal Component
+const RescheduleModal = ({ isOpen, onClose, meeting, onReschedule }) => {
+    const [formData, setFormData] = useState({
+        start_time: '',
+        end_time: '',
+        status: 'Scheduled'
+    });
+    const [errors, setErrors] = useState({});
 
-// Meeting List Component
-const MeetingList = ({ meetings, onEdit, onDelete, onView, onMarkCompleted, onMarkCancelled, onMarkScheduled }) => {
+    useEffect(() => {
+        if (meeting) {
+            // Format dates for input fields
+            const startTime = meeting.start_time ? new Date(meeting.start_time) : '';
+            const endTime = meeting.end_time ? new Date(meeting.end_time) : '';
+            
+            setFormData({
+                start_time: startTime ? startTime.toISOString().slice(0, 16) : '',
+                end_time: endTime ? endTime.toISOString().slice(0, 16) : '',
+                status: 'Scheduled'
+            });
+        }
+    }, [meeting]);
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+        if (errors[name]) {
+            setErrors(prev => ({
+                ...prev,
+                [name]: undefined
+            }));
+        }
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        
+        // Validate that end time is after start time
+        if (new Date(formData.end_time) <= new Date(formData.start_time)) {
+            setErrors({
+                ...errors,
+                end_time: 'End time must be after start time'
+            });
+            return;
+        }
+        
+        // Use the router to update the meeting
+        router.post(`/meetings/${meeting.id}/reschedule`, {
+            ...formData,
+            _method: 'PUT'  // Add method spoofing for Laravel compatibility
+        }, {
+            onError: (errors) => {
+                setErrors(errors);
+                
+                // Show SweetAlert error toast notification
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'error',
+                    title: 'Please check the form for errors.',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true
+                });
+            },
+            onSuccess: () => {
+                onClose();
+                
+                // Show SweetAlert toast notification
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true,
+                    didOpen: (toast) => {
+                        toast.addEventListener('mouseenter', Swal.stopTimer)
+                        toast.addEventListener('mouseleave', Swal.resumeTimer)
+                    }
+                });
+                
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: 'Meeting rescheduled successfully.',
+                    iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                    customClass: {
+                        popup: 'px-6 py-4 rounded-lg shadow-md',
+                        title: 'text-gray-700 font-medium'
+                    }
+                });
+                
+                if (onReschedule) {
+                    onReschedule();
+                }
+            },
+        });
+    };
+
+    return (
+        <Modal 
+            show={isOpen} 
+            onClose={onClose}
+            title="Reschedule Meeting"
+        >
+            <form onSubmit={handleSubmit} className="p-6">
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="start_time" className="block text-sm font-medium mb-1">
+                            New Start Date & Time <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="start_time"
+                            name="start_time"
+                            type="datetime-local"
+                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.start_time ? 'border-red-500' : 'border-gray-300'}`}
+                            value={formData.start_time}
+                            onChange={handleChange}
+                            required
+                        />
+                        {errors.start_time && <p className="mt-1 text-sm text-red-500">{errors.start_time}</p>}
+                    </div>
+
+                    <div>
+                        <label htmlFor="end_time" className="block text-sm font-medium mb-1">
+                            New End Date & Time <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="end_time"
+                            name="end_time"
+                            type="datetime-local"
+                            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.end_time ? 'border-red-500' : 'border-gray-300'}`}
+                            value={formData.end_time}
+                            onChange={handleChange}
+                            required
+                        />
+                        {errors.end_time && <p className="mt-1 text-sm text-red-500">{errors.end_time}</p>}
+                    </div>
+                    
+                    <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
+                        <div className="flex items-start">
+                            <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 mr-2" />
+                            <div>
+                                <p className="text-sm font-medium text-yellow-800">Rescheduling Notice</p>
+                                <p className="text-sm text-yellow-700">
+                                    This will notify all participants about the schedule change. 
+                                    The meeting status will be set to "Scheduled".
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-6">
+                    <Button 
+                        type="button" 
+                        onClick={onClose}
+                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                    >
+                        Cancel
+                    </Button>
+                    <Button 
+                        type="submit"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                        Reschedule Meeting
+                    </Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+const MeetingList = ({ meetings, onEdit, onDelete, onView, onMarkCompleted, onMarkCancelled, onMarkScheduled, onReschedule }) => {
     if (!meetings?.length) {
         return <div className="p-4 text-center text-gray-500">No meetings found</div>;
     }
@@ -1152,6 +1338,18 @@ const MeetingList = ({ meetings, onEdit, onDelete, onView, onMarkCompleted, onMa
                                         <Edit2 className="h-4 w-4" />
                                     </Button>
                                     
+                                    {/* Add Reschedule button for meetings that can be rescheduled */}
+                                    {(meeting.status === 'Scheduled' || meeting.status === 'Postponed') && (
+                                        <Button 
+                                            variant="default"
+                                            className="p-2 bg-purple-500 hover:bg-purple-600 text-white"
+                                            onClick={() => onReschedule(meeting)}
+                                            title="Reschedule Meeting"
+                                        >
+                                            <CalendarPlus className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                    
                                     {meeting.status !== 'Completed' && (
                                         <Button 
                                             variant="default"
@@ -1163,7 +1361,8 @@ const MeetingList = ({ meetings, onEdit, onDelete, onView, onMarkCompleted, onMa
                                         </Button>
                                     )}
                                     
-                                    {meeting.status !== 'Cancelled' && (
+                                    {/* Don't show Cancel button if meeting is already Completed or Cancelled */}
+                                    {meeting.status !== 'Cancelled' && meeting.status !== 'Completed' && (
                                         <Button 
                                             variant="destructive"
                                             className="p-2"
@@ -1174,14 +1373,14 @@ const MeetingList = ({ meetings, onEdit, onDelete, onView, onMarkCompleted, onMa
                                         </Button>
                                     )}
                                     
-                                    {(meeting.status === 'Cancelled' || meeting.status === 'Postponed') && (
+                                   {(meeting.status === 'Cancelled' || meeting.status === 'Postponed') && (
                                         <Button 
                                             variant="default"
                                             className="p-2 bg-green-500 hover:bg-green-600 text-white"
-                                            onClick={() => onMarkScheduled(meeting.id)}
-                                            title="Mark as Scheduled"
+                                            onClick={() => onReschedule(meeting)}
+                                            title="Reschedule Meeting"
                                         >
-                                            <Calendar className="h-4 w-4" />
+                                            <CalendarPlus className="h-4 w-4" />
                                         </Button>
                                     )}
                                     
@@ -1227,7 +1426,6 @@ const MeetingList = ({ meetings, onEdit, onDelete, onView, onMarkCompleted, onMa
         </div>
     );
 };
-
 const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = 'all', flash }) => {
     console.log('Initial meetings received:', initialMeetings);
     console.log('Current status:', currentStatus);
@@ -1245,6 +1443,7 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
     const [selectedMeeting, setSelectedMeeting] = useState(null);
     const [formMode, setFormMode] = useState('create');
     const [viewModalOpen, setViewModalOpen] = useState(false);
+    const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false,
         title: '',
@@ -1270,6 +1469,12 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
     
     // Fix: Tracking if we've already fetched meetings via API
     const hasAttemptedFetch = useRef(false);
+
+    // Debug state changes for modal visibility
+    useEffect(() => {
+        console.log('rescheduleModalOpen state changed:', rescheduleModalOpen);
+        console.log('selectedMeeting:', selectedMeeting);
+    }, [rescheduleModalOpen, selectedMeeting]);
 
     // If we don't have meetings data, fetch it directly - but only once
     useEffect(() => {
@@ -1354,12 +1559,20 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
         }
     }, [safeMeetings]);
 
-
     const handleView = (meeting) => {
         setSelectedMeeting(meeting);
         setViewModalOpen(true);
     };
 
+    // Add handle function for rescheduling
+    const handleReschedule = (meeting) => {
+        console.log('Rescheduling meeting:', meeting);
+        setSelectedMeeting(meeting);
+        setRescheduleModalOpen(true);
+        console.log('Modal should be open:', true);
+    };
+
+    // For handleDelete function
     const handleDelete = (id) => {
         setConfirmModal({
             isOpen: true,
@@ -1368,17 +1581,17 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
             confirmText: 'Delete',
             confirmVariant: 'destructive',
             onConfirm: () => {
-                // Use the POST method with _method parameter for method spoofing
+                // Using POST with _method: 'DELETE' for method spoofing
                 router.post(`/meetings/${id}`, {
-                    _method: 'DELETE' // This tells Laravel to treat it as a DELETE request
+                    _method: 'DELETE'
                 }, {
                     onSuccess: () => {
                         setConfirmModal({...confirmModal, isOpen: false});
                         
-                        // Show toast notification on the right side
+                        // Show SweetAlert toast notification
                         const Toast = Swal.mixin({
                             toast: true,
-                            position: 'top-end', // Changed from 'top' to 'top-end' for right side positioning
+                            position: 'top-end',
                             showConfirmButton: false,
                             timer: 3000,
                             timerProgressBar: true,
@@ -1401,10 +1614,10 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
                     onError: (error) => {
                         console.error('Delete failed:', error);
                         
-                        // Error toast also on the right side
+                        // Error toast notification
                         Swal.fire({
                             toast: true,
-                            position: 'top-end', // Right side positioning
+                            position: 'top-end',
                             icon: 'error',
                             title: 'Failed to delete meeting',
                             showConfirmButton: false,
@@ -1415,8 +1628,8 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
             }
         });
     };
-    
-    
+
+    // For the handleMarkCompleted function
     const handleMarkCompleted = (id) => {
         setConfirmModal({
             isOpen: true,
@@ -1425,16 +1638,15 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
             confirmText: 'Mark Completed',
             confirmVariant: 'default',
             onConfirm: () => {
-                router.post(`/meetings/${id}/mark-completed`, {}, {
-                    preserveState: true,
-                    preserveScroll: true,
-                    onSuccess: () => {
+                // Make sure this route exists in your Laravel routes
+                axios.post(`/meetings/${id}/mark-completed`)
+                    .then(response => {
                         setConfirmModal({...confirmModal, isOpen: false});
                         
-                        // Show toast notification on the right side
+                        // Show success notification
                         const Toast = Swal.mixin({
                             toast: true,
-                            position: 'top-end', // Right side positioning
+                            position: 'top-end',
                             showConfirmButton: false,
                             timer: 3000,
                             timerProgressBar: true,
@@ -1453,14 +1665,132 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
                                 title: 'text-gray-700 ml-3 font-medium'
                             }
                         });
-                    },
-                    onError: () => {
-                        // Error toast also on the right side
+                        
+                        // Refresh the meetings data
+                        window.location.reload();
+                    })
+                    .catch(error => {
+                        console.error('Failed to mark meeting as completed:', error);
+                        
+                        // Show error notification
                         Swal.fire({
                             toast: true,
-                            position: 'top-end', // Right side positioning
+                            position: 'top-end',
                             icon: 'error',
                             title: 'Failed to update meeting status',
+                            showConfirmButton: false,
+                            timer: 3000
+                        });
+                    });
+            }
+        });
+    };
+
+    // For the handleMarkCancelled function
+    const handleMarkCancelled = (id) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Cancel Meeting',
+            message: 'Are you sure you want to cancel this meeting?',
+            confirmText: 'Cancel Meeting',
+            confirmVariant: 'destructive',
+            onConfirm: () => {
+                // Make sure this route exists in your Laravel routes
+                axios.post(`/meetings/${id}/mark-cancelled`)
+                    .then(response => {
+                        setConfirmModal({...confirmModal, isOpen: false});
+                        
+                        // Show success notification
+                        const Toast = Swal.mixin({
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 3000,
+                            timerProgressBar: true,
+                            didOpen: (toast) => {
+                                toast.addEventListener('mouseenter', Swal.stopTimer)
+                                toast.addEventListener('mouseleave', Swal.resumeTimer)
+                            }
+                        });
+                        
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'Meeting cancelled successfully',
+                            iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                            customClass: {
+                                popup: 'px-6 py-4 rounded-lg shadow-md flex items-start',
+                                title: 'text-gray-700 ml-3 font-medium'
+                            }
+                        });
+                        
+                        // Refresh the meetings data
+                        window.location.reload();
+                    })
+                    .catch(error => {
+                        console.error('Failed to cancel meeting:', error);
+                        
+                        // Show error notification
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'error',
+                            title: 'Failed to cancel meeting',
+                            showConfirmButton: false,
+                            timer: 3000
+                        });
+                    });
+            }
+        });
+    };
+    
+    // For handleMarkScheduled function (corrected to use the proper meetings endpoint)
+    const handleMarkScheduled = (id) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Reschedule Meeting',
+            message: 'Are you sure you want to mark this meeting as scheduled?',
+            confirmText: 'Schedule',
+            confirmVariant: 'default',
+            onConfirm: () => {
+                // Fixed to use the correct endpoint for meetings
+                router.post(`/meetings/${id}/mark-scheduled`, {
+                    status: 'Scheduled'
+                }, {
+                    preserveState: true,
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setConfirmModal({...confirmModal, isOpen: false});
+                        
+                        // Show SweetAlert toast notification
+                        const Toast = Swal.mixin({
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 3000,
+                            timerProgressBar: true,
+                            didOpen: (toast) => {
+                                toast.addEventListener('mouseenter', Swal.stopTimer)
+                                toast.addEventListener('mouseleave', Swal.resumeTimer)
+                            }
+                        });
+                        
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'Meeting rescheduled successfully',
+                            iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
+                            customClass: {
+                                popup: 'px-6 py-4 rounded-lg shadow-md flex items-start',
+                                title: 'text-gray-700 ml-3 font-medium'
+                            }
+                        });
+                    },
+                    onError: () => {
+                        // Error toast notification
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'error',
+                            title: 'Failed to reschedule meeting',
                             showConfirmButton: false,
                             timer: 3000
                         });
@@ -1470,112 +1800,6 @@ const MeetingPage = ({ meetings: initialMeetings, counts = {}, currentStatus = '
         });
     };
 
- // Update the handleMarkCancelled function:
-const handleMarkCancelled = (id) => {
-    setConfirmModal({
-        isOpen: true,
-        title: 'Cancel Meeting',
-        message: 'Are you sure you want to cancel this meeting?',
-        confirmText: 'Cancel Meeting',
-        confirmVariant: 'destructive',
-        onConfirm: () => {
-            router.post(`/meetings/${id}/mark-cancelled`, {}, {
-                preserveState: true,
-                preserveScroll: true,
-                onSuccess: () => {
-                    setConfirmModal({...confirmModal, isOpen: false});
-                    
-                    // Show toast notification
-                    const Toast = Swal.mixin({
-                        toast: true,
-                        position: 'top',
-                        showConfirmButton: false,
-                        timer: 3000,
-                        timerProgressBar: true,
-                        didOpen: (toast) => {
-                            toast.addEventListener('mouseenter', Swal.stopTimer)
-                            toast.addEventListener('mouseleave', Swal.resumeTimer)
-                        }
-                    });
-                    
-                    Toast.fire({
-                        icon: 'success',
-                        title: `Meeting cancelled successfully`,
-                        iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
-                        customClass: {
-                            popup: 'px-6 py-4 rounded-lg shadow-md flex items-start',
-                            title: 'text-gray-700 ml-3 font-medium'
-                        }
-                    });
-                },
-                onError: () => {
-                    // Error toast
-                    Swal.fire({
-                        toast: true,
-                        position: 'top',
-                        icon: 'error',
-                        title: 'Failed to cancel meeting',
-                        showConfirmButton: false,
-                        timer: 3000
-                    });
-                }
-            });
-        }
-    });
-};
-   // Update the handleMarkScheduled function
-   const handleMarkScheduled = (id) => {
-    setConfirmModal({
-        isOpen: true,
-        title: 'Reschedule Meeting',
-        message: 'Are you sure you want to mark this meeting as scheduled?',
-        confirmText: 'Schedule',
-        confirmVariant: 'default',
-        onConfirm: () => {
-            router.post(`/meetings/${id}/mark-scheduled`, {}, {
-                preserveState: true,
-                preserveScroll: true,
-                onSuccess: () => {
-                    setConfirmModal({...confirmModal, isOpen: false});
-                    
-                    // Show toast notification
-                    const Toast = Swal.mixin({
-                        toast: true,
-                        position: 'top',
-                        showConfirmButton: false,
-                        timer: 3000,
-                        timerProgressBar: true,
-                        didOpen: (toast) => {
-                            toast.addEventListener('mouseenter', Swal.stopTimer)
-                            toast.addEventListener('mouseleave', Swal.resumeTimer)
-                        }
-                    });
-                    
-                    Toast.fire({
-                        icon: 'success',
-                        title: `Meeting rescheduled successfully`,
-                        iconHtml: '<div class="rounded-full bg-green-100 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>',
-                        customClass: {
-                            popup: 'px-6 py-4 rounded-lg shadow-md flex items-start',
-                            title: 'text-gray-700 ml-3 font-medium'
-                        }
-                    });
-                },
-                onError: () => {
-                    // Error toast
-                    Swal.fire({
-                        toast: true,
-                        position: 'top',
-                        icon: 'error',
-                        title: 'Failed to reschedule meeting',
-                        showConfirmButton: false,
-                        timer: 3000
-                    });
-                }
-            });
-        }
-    });
-};
     // Fix: Prevent unnecessary router calls
     const handleTabChange = (value) => {
         if (value !== activeTab) {
@@ -1712,6 +1936,7 @@ const handleMarkCancelled = (id) => {
                                 onMarkCompleted={handleMarkCompleted}
                                 onMarkCancelled={handleMarkCancelled}
                                 onMarkScheduled={handleMarkScheduled}
+                                onReschedule={handleReschedule}
                             />
                         </div>
 
@@ -1734,6 +1959,26 @@ const handleMarkCancelled = (id) => {
                             mode={formMode}
                         />
                         
+                        {/* Make sure RescheduleModal is rendered correctly */}
+                        {/* Adding a direct console.log to check if this part of JSX is being rendered */}
+                        {console.log("Rendering RescheduleModal with props:", { 
+                            isOpen: rescheduleModalOpen, 
+                            meeting: selectedMeeting 
+                        })}
+                        <RescheduleModal
+                            isOpen={rescheduleModalOpen}
+                            onClose={() => {
+                                console.log("Closing reschedule modal");
+                                setRescheduleModalOpen(false);
+                                setSelectedMeeting(null);
+                            }}
+                            meeting={selectedMeeting}
+                            onReschedule={() => {
+                                // Reload or refresh meetings after rescheduling
+                                window.location.reload();
+                            }}
+                        />
+                        
                         <ConfirmModal
                             isOpen={confirmModal.isOpen}
                             onClose={() => setConfirmModal({...confirmModal, isOpen: false})}
@@ -1750,4 +1995,4 @@ const handleMarkCancelled = (id) => {
     );
 };
 
-export default MeetingPage;
+export default MeetingPage; 

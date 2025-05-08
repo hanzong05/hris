@@ -1,7 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 use App\Models\Meeting;
 use App\Models\Employee;
 use Illuminate\Http\Request;
@@ -64,7 +65,65 @@ class MeetingsController extends Controller
         
         return response()->json(['meetings' => $meetings]);
     }
-
+    public function reschedule(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'start_time' => 'required|date',
+            'end_time' => 'required|date|after:start_time',
+        ]);
+    
+        if ($validator->fails()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+    
+        try {
+            $meeting = Meeting::findOrFail($id);
+            
+            // Update the meeting's time and set status to Scheduled
+            $meeting->update([
+                'start_time' => $request->start_time,
+                'end_time' => $request->end_time,
+                'status' => 'Scheduled',
+            ]);
+            
+            // TODO: Notify participants of the schedule change (optional)
+            // You can add notification logic here if needed
+            
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Meeting rescheduled successfully',
+                    'meeting' => $meeting->fresh(['participants'])
+                ]);
+            }
+            
+            return redirect()->route('meetings.index')->with('message', 'Meeting rescheduled successfully');
+            
+        } catch (\Exception $e) {
+            Log::error('Failed to reschedule meeting', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'error' => 'Failed to reschedule meeting: ' . $e->getMessage()
+                ], 500);
+            }
+            
+            return redirect()->back()
+                ->with('error', 'Failed to reschedule meeting: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
     public function store(Request $request)
     {
         $validated = $request->validate([
