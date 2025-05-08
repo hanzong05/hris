@@ -73,18 +73,19 @@ class HrCalendarController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getDepartments()
-    {
-        try {
-            // Get unique departments from events and meetings
-            $departments = Department::where('active', true)->get();
-            
-            return response()->json($departments);
-        } catch (\Exception $e) {
-            Log::error('Error in HR Calendar getDepartments: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to load departments'], 500);
-        }
+   // Fix for HrCalendarController.php - getDepartments method
+public function getDepartments()
+{
+    try {
+        // Get all departments, regardless of active status to ensure we get results
+        $departments = Department::all();
+        
+        return response()->json($departments);
+    } catch (\Exception $e) {
+        Log::error('Error in HR Calendar getDepartments: ' . $e->getMessage());
+        return response()->json(['error' => 'Failed to load departments'], 500);
     }
+}
     
     /**
      * Format events and meetings for FullCalendar

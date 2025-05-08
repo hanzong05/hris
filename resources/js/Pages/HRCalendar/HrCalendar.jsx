@@ -31,69 +31,68 @@ import Modal from '@/Components/Modal';
 
 // Simple Tabs Component
 const Tabs = ({ children, defaultValue, className = "", onValueChange }) => {
-  const [activeTab, setActiveTab] = useState(defaultValue);
+    const [activeTab, setActiveTab] = useState(defaultValue);
+    
+    useEffect(() => {
+      if (onValueChange) {
+        onValueChange(activeTab);
+      }
+    }, [activeTab, onValueChange]);
+    
+    return (
+      <div className={className}>
+        {React.Children.map(children, child => {
+          if (child && (child.type === TabsList || child.type === TabsContent)) {
+            return React.cloneElement(child, { activeTab, setActiveTab });
+          }
+          return child;
+        })}
+      </div>
+    );
+  };
   
-  useEffect(() => {
-    if (onValueChange) {
-      onValueChange(activeTab);
-    }
-  }, [activeTab, onValueChange]);
+  // TabsList Component
+  const TabsList = ({ children, activeTab, setActiveTab, className = "" }) => {
+    return (
+      <div className={`flex space-x-1 rounded-lg bg-gray-100 p-1 ${className}`}>
+        {React.Children.map(children, child => {
+          if (child && child.type === TabsTrigger) {
+            return React.cloneElement(child, { activeTab, setActiveTab });
+          }
+          return child;
+        })}
+      </div>
+    );
+  };
   
-  return (
-    <div className={className}>
-      {React.Children.map(children, child => {
-        if (child && (child.type === TabsList || child.type === TabsContent)) {
-          return React.cloneElement(child, { activeTab, setActiveTab });
-        }
-        return child;
-      })}
-    </div>
-  );
-};
-
-// TabsList Component
-const TabsList = ({ children, activeTab, setActiveTab, className = "" }) => {
-  return (
-    <div className={`flex space-x-1 rounded-lg bg-gray-100 p-1 ${className}`}>
-      {React.Children.map(children, child => {
-        if (child && child.type === TabsTrigger) {
-          return React.cloneElement(child, { activeTab, setActiveTab });
-        }
-        return child;
-      })}
-    </div>
-  );
-};
-
-// TabsTrigger Component
-const TabsTrigger = ({ children, value, activeTab, setActiveTab }) => {
-  const isActive = activeTab === value;
+  // TabsTrigger Component
+  const TabsTrigger = ({ children, value, activeTab, setActiveTab }) => {
+    const isActive = activeTab === value;
+    
+    return (
+      <button
+        onClick={() => setActiveTab(value)}
+        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+          isActive
+            ? 'bg-white text-gray-900 shadow-sm' 
+            : 'text-gray-600 hover:text-gray-900'
+        }`}
+      >
+        {children}
+      </button>
+    );
+  };
   
-  return (
-    <button
-      onClick={() => setActiveTab(value)}
-      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-        isActive
-          ? 'bg-white text-gray-900 shadow-sm' 
-          : 'text-gray-600 hover:text-gray-900'
-      }`}
-    >
-      {children}
-    </button>
-  );
-};
-
-// TabsContent Component
-const TabsContent = ({ children, value, activeTab }) => {
-  if (activeTab !== value) return null;
-  
-  return (
-    <div className="mt-2">
-      {children}
-    </div>
-  );
-};
-
+  // TabsContent Component
+  const TabsContent = ({ children, value, activeTab }) => {
+    if (activeTab !== value) return null;
+    
+    return (
+      <div className="mt-2">
+        {children}
+      </div>
+    );
+  };
 // Event Details Modal Component
 const EventDetailsModal = ({ isOpen, onClose, event, onEdit, onMarkCompleted, onMarkCancelled, onMarkScheduled }) => {
     if (!isOpen || !event) return null;
@@ -155,18 +154,19 @@ const EventDetailsModal = ({ isOpen, onClose, event, onEdit, onMarkCompleted, on
         onEdit(event);
     };
 
-    const handleMarkCompleted = () => {
-        onClose();
-        onMarkCompleted(event.id, event.eventType);
+    // Add these local handlers to properly close the modal first
+    const handleMarkCompletedClick = () => {
+        onClose(); // Close modal first
+        onMarkCompleted(event.id, event.eventType); // Then call parent handler
     };
 
-    const handleMarkCancelled = () => {
-        onClose();
+    const handleMarkCancelledClick = () => {
+        onClose(); // Close modal first
         onMarkCancelled(event.id, event.eventType);
     };
 
-    const handleMarkScheduled = () => {
-        onClose();
+    const handleMarkScheduledClick = () => {
+        onClose(); // Close modal first
         onMarkScheduled(event.id, event.eventType);
     };
 
@@ -243,7 +243,7 @@ const EventDetailsModal = ({ isOpen, onClose, event, onEdit, onMarkCompleted, on
                 <div className="flex space-x-2">
                     {event.status !== 'Completed' && (
                         <Button 
-                            onClick={handleMarkCompleted}
+                            onClick={handleMarkCompletedClick}
                             className="bg-blue-600 hover:bg-blue-700 shadow-sm"
                         >
                             <CheckCircle className="h-4 w-4 mr-1" /> Mark as Completed
@@ -252,7 +252,7 @@ const EventDetailsModal = ({ isOpen, onClose, event, onEdit, onMarkCompleted, on
                     
                     {event.status !== 'Cancelled' && (
                         <Button 
-                            onClick={handleMarkCancelled}
+                            onClick={handleMarkCancelledClick}
                             variant="destructive"
                             className="shadow-sm"
                         >
@@ -262,7 +262,7 @@ const EventDetailsModal = ({ isOpen, onClose, event, onEdit, onMarkCompleted, on
                     
                     {(event.status === 'Cancelled' || event.status === 'Postponed') && (
                         <Button 
-                            onClick={handleMarkScheduled}
+                            onClick={handleMarkScheduledClick}
                             className="bg-green-600 hover:bg-green-700 shadow-sm"
                         >
                             <Calendar className="h-4 w-4 mr-1" /> Mark as Scheduled
@@ -289,8 +289,6 @@ const EventDetailsModal = ({ isOpen, onClose, event, onEdit, onMarkCompleted, on
         </Modal>
     );
 };
-
-// Legend Component for calendar colors
 const CalendarLegend = () => (
     <div className="flex flex-wrap gap-4 mt-4 p-4 bg-white rounded-lg border border-gray-100 shadow-sm text-sm">
         <div className="flex items-center">
@@ -745,118 +743,125 @@ const HrCalendar = () => {
         }
     };
 
-    // Handle marking an event as completed
+    // Handler functions for the main component
     const handleMarkCompleted = (id, type) => {
-        // Extract the actual ID from the format used in calendar (event_123 or meeting_456)
+        // Extract the actual ID from the format used in calendar
         const actualId = typeof id === 'string' && id.includes('_') ? id.split('_')[1] : id;
         
-        const endpoint = type === 'event' 
-            ? `/events/${actualId}/update-status` 
-            : `/meetings/${actualId}/mark-completed`;
-            
-        const data = type === 'event' ? { status: 'Completed' } : {};
+        // Create a form element
+        const form = document.createElement('form');
+        form.method = 'POST';
         
-        axios.post(endpoint, data)
-            .then(response => {
-                // Show success notification
-                Swal.fire({
-                    title: 'Success!',
-                    text: `${type === 'event' ? 'Event' : 'Meeting'} marked as completed.`,
-                    icon: 'success',
-                    confirmButtonText: 'OK',
-                    customClass: {
-                        confirmButton: 'btn btn-primary'
-                    }
-                });
-                
-                // Refresh data
-                fetchData();
-            })
-            .catch(error => {
-                console.error('Error updating status:', error);
-                
-                // Show error notification
-                Swal.fire({
-                    title: 'Error!',
-                    text: `Failed to mark ${type} as completed.`,
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-            });
+        // Set appropriate action based on event type
+        if (type === 'event') {
+            form.action = `/events/${actualId}/status`;
+        } else {
+            form.action = `/meetings/${actualId}/mark-completed`;
+        }
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+        
+        // Add status data for events
+        if (type === 'event') {
+            const statusInput = document.createElement('input');
+            statusInput.type = 'hidden';
+            statusInput.name = 'status';
+            statusInput.value = 'Completed';
+            form.appendChild(statusInput);
+        }
+        
+        // Add to body, submit, and remove
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
     };
-
-    // Handle marking an event as cancelled
+    
     const handleMarkCancelled = (id, type) => {
-        // Extract the actual ID from the format used in calendar (event_123 or meeting_456)
+        // Extract the actual ID
         const actualId = typeof id === 'string' && id.includes('_') ? id.split('_')[1] : id;
         
-        const endpoint = type === 'event' 
-            ? `/events/${actualId}/update-status` 
-            : `/meetings/${actualId}/mark-cancelled`;
-            
-        const data = type === 'event' ? { status: 'Cancelled' } : {};
+        // Create a form element
+        const form = document.createElement('form');
+        form.method = 'POST';
         
-        axios.post(endpoint, data)
-            .then(response => {
-                // Show success notification
-                Swal.fire({
-                    title: 'Success!',
-                    text: `${type === 'event' ? 'Event' : 'Meeting'} marked as cancelled.`,
-                    icon: 'success',
-                    confirmButtonText: 'OK'
-                });
-                
-                // Refresh data
-                fetchData();
-            })
-            .catch(error => {
-                console.error('Error updating status:', error);
-                
-                // Show error notification
-                Swal.fire({
-                    title: 'Error!',
-                    text: `Failed to mark ${type} as cancelled.`,
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-            });
+        // Set appropriate action
+        if (type === 'event') {
+            form.action = `/events/${actualId}/status`;
+        } else {
+            form.action = `/meetings/${actualId}/mark-cancelled`;
+        }
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+        
+        // Add status data for events
+        if (type === 'event') {
+            const statusInput = document.createElement('input');
+            statusInput.type = 'hidden';
+            statusInput.name = 'status';
+            statusInput.value = 'Cancelled';
+            form.appendChild(statusInput);
+        }
+        
+        // Add to body, submit, and remove
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
     };
-
-    // Handle marking an event as scheduled
+    
     const handleMarkScheduled = (id, type) => {
-        // Extract the actual ID from the format used in calendar (event_123 or meeting_456)
+        // Extract the actual ID
         const actualId = typeof id === 'string' && id.includes('_') ? id.split('_')[1] : id;
         
-        const endpoint = type === 'event' 
-            ? `/events/${actualId}/update-status` 
-            : `/meetings/${actualId}/mark-scheduled`;
-            
-        const data = type === 'event' ? { status: 'Scheduled' } : {};
+        // Create a form element
+        const form = document.createElement('form');
+        form.method = 'POST';
         
-        axios.post(endpoint, data)
-            .then(response => {
-                // Show success notification
-                Swal.fire({
-                    title: 'Success!',
-                    text: `${type === 'event' ? 'Event' : 'Meeting'} marked as scheduled.`,
-                    icon: 'success',
-                    confirmButtonText: 'OK'
-                });
-                
-                // Refresh data
-                fetchData();
-            })
-            .catch(error => {
-                console.error('Error updating status:', error);
-                
-                // Show error notification
-                Swal.fire({
-                    title: 'Error!',
-                    text: `Failed to mark ${type} as scheduled.`,
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-            });
+        // Set appropriate action
+        if (type === 'event') {
+            form.action = `/events/${actualId}/status`;
+        } else {
+            form.action = `/meetings/${actualId}/mark-scheduled`;
+        }
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+        
+        // Add status data for events
+        if (type === 'event') {
+            const statusInput = document.createElement('input');
+            statusInput.type = 'hidden';
+            statusInput.name = 'status';
+            statusInput.value = 'Scheduled';
+            form.appendChild(statusInput);
+        }
+        
+        // Add to body, submit, and remove
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
     };
 
     // Calculate summary counts
