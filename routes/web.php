@@ -28,10 +28,10 @@
     use App\Http\Controllers\DepartmentController;
     use App\Http\Controllers\LineController;
     use App\Http\Controllers\SectionController;
-    use App\Http\Controllers\TrainingsController;
     use App\Http\Controllers\MeetingsController; 
     use App\Http\Controllers\EventsController; 
-
+    use App\Http\Controllers\TrainingController;
+    use App\Http\Controllers\TrainingTypeController;
 
     use Illuminate\Foundation\Application;
     use Illuminate\Support\Facades\Route;
@@ -602,4 +602,29 @@
             Route::put('/events/{id}/reschedule', [EventsController::class, 'reschedule'])
             ->name('events.reschedule');
     });
+
+
+
+    // Training Routes
+Route::middleware(['role:superadmin,hrd'])->group(function () {
+    // Training Management
+    Route::get('/trainings', [TrainingController::class, 'index'])->name('trainings.index');
+    Route::get('/trainings/list', [TrainingController::class, 'list'])->name('trainings.list');
+    Route::post('/trainings', [TrainingController::class, 'store'])->name('trainings.store');
+    Route::put('/trainings/{id}', [TrainingController::class, 'update'])->name('trainings.update');
+    Route::delete('/trainings/{id}', [TrainingController::class, 'destroy'])->name('trainings.destroy');
+    Route::post('/trainings/{id}/status', [TrainingController::class, 'updateStatus'])->name('trainings.updateStatus');
+    Route::post('/trainings/{trainingId}/participants/{participantId}/status', [TrainingController::class, 'updateParticipantStatus'])
+        ->name('trainings.updateParticipantStatus');
+    Route::get('/trainings/export', [TrainingController::class, 'export'])->name('trainings.export');
+    
+    // Training Types
+    Route::get('/training-types', [TrainingTypeController::class, 'index'])->name('training-types.index');
+    Route::get('/training-types/list', [TrainingTypeController::class, 'list'])->name('training-types.list');
+    Route::post('/training-types', [TrainingTypeController::class, 'store'])->name('training-types.store');
+    Route::put('/training-types/{id}', [TrainingTypeController::class, 'update'])->name('training-types.update');
+    Route::delete('/training-types/{id}', [TrainingTypeController::class, 'destroy'])->name('training-types.destroy');
+    Route::patch('/training-types/{id}/toggle-active', [TrainingTypeController::class, 'toggleActive'])
+        ->name('training-types.toggle-active');
+});
     require __DIR__.'/auth.php';

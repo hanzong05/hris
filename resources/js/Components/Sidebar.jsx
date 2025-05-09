@@ -253,8 +253,8 @@ const Sidebar = () => {
             label: 'Training',
             allowedRoles: ['superadmin', 'hrd'],
             items: [
-                { label: 'Training Lists', path: '/training/lists' },
-                { label: 'Training Type', path: '/training/types' },
+                { label: 'Training Lists', path: '/trainings' },      // FIXED
+                { label: 'Training Type', path: '/training-types' },  // FIXED
                 { label: 'Trainers', path: '/training/trainers' }
             ]
         },
