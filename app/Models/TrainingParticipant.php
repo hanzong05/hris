@@ -1,24 +1,55 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+namespace App\Models;
 
-return new class extends Migration
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class TrainingParticipant extends Model
 {
-    public function up(): void
+    use HasFactory;
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'training_participants';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'training_id',
+        'employee_id',
+        'attendance_status',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    /**
+     * Get the training that owns the participant.
+     */
+    public function training()
     {
-        Schema::create('training_types', function (Blueprint $table) {
-            $table->id();
-            $table->string('name')->unique();
-            $table->text('description')->nullable();
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-        });
+        return $this->belongsTo(Training::class);
     }
 
-    public function down(): void
+    /**
+     * Get the employee that owns the participant record.
+     */
+    public function employee()
     {
-        Schema::dropIfExists('training_types');
+        return $this->belongsTo(Employee::class);
     }
-};
+}

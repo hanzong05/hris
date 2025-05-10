@@ -34,12 +34,25 @@ class TrainingTypeController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:training_types',
             'description' => 'nullable|string',
-            'is_active' => 'required|boolean'
+            'is_active' => 'required|boolean',
+            'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:5120', // 5MB limit
         ]);
-
+    
         try {
-            $trainingType = TrainingType::create($validated);
-
+            $data = [
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'is_active' => $validated['is_active'],
+            ];
+    
+            // Handle image upload if present
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('training_types', 'public');
+                $data['image_url'] = '/storage/' . $imagePath;
+            }
+    
+            $trainingType = TrainingType::create($data);
+    
             return response()->json([
                 'message' => 'Training type created successfully',
                 'trainingType' => $trainingType
@@ -51,7 +64,6 @@ class TrainingTypeController extends Controller
             ], 500);
         }
     }
-
     public function update(Request $request, $id)
     {
         $trainingType = TrainingType::findOrFail($id);
@@ -59,12 +71,25 @@ class TrainingTypeController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:training_types,name,' . $id,
             'description' => 'nullable|string',
-            'is_active' => 'required|boolean'
+            'is_active' => 'required|boolean',
+            'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:5120', // Add image validation
         ]);
-
+    
         try {
-            $trainingType->update($validated);
-
+            $data = [
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'is_active' => $validated['is_active'],
+            ];
+    
+            // Handle image upload if present
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('training_types', 'public');
+                $data['image_url'] = '/storage/' . $imagePath;
+            }
+    
+            $trainingType->update($data);
+    
             return response()->json([
                 'message' => 'Training type updated successfully',
                 'trainingType' => $trainingType

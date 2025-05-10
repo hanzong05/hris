@@ -32,7 +32,7 @@
     use App\Http\Controllers\EventsController; 
     use App\Http\Controllers\TrainingController;
     use App\Http\Controllers\TrainingTypeController;
-
+    use App\Http\Controllers\TrainerController;
     use Illuminate\Foundation\Application;
     use Illuminate\Support\Facades\Route;
     use Illuminate\Support\Facades\Auth;
@@ -605,9 +605,9 @@
 
 
 
-    // Training Routes
+// Training Routes
 Route::middleware(['role:superadmin,hrd'])->group(function () {
-    // Training Management
+    // Training Management (existing routes)
     Route::get('/trainings', [TrainingController::class, 'index'])->name('trainings.index');
     Route::get('/trainings/list', [TrainingController::class, 'list'])->name('trainings.list');
     Route::post('/trainings', [TrainingController::class, 'store'])->name('trainings.store');
@@ -618,7 +618,7 @@ Route::middleware(['role:superadmin,hrd'])->group(function () {
         ->name('trainings.updateParticipantStatus');
     Route::get('/trainings/export', [TrainingController::class, 'export'])->name('trainings.export');
     
-    // Training Types
+    // Training Types (existing routes)
     Route::get('/training-types', [TrainingTypeController::class, 'index'])->name('training-types.index');
     Route::get('/training-types/list', [TrainingTypeController::class, 'list'])->name('training-types.list');
     Route::post('/training-types', [TrainingTypeController::class, 'store'])->name('training-types.store');
@@ -626,5 +626,14 @@ Route::middleware(['role:superadmin,hrd'])->group(function () {
     Route::delete('/training-types/{id}', [TrainingTypeController::class, 'destroy'])->name('training-types.destroy');
     Route::patch('/training-types/{id}/toggle-active', [TrainingTypeController::class, 'toggleActive'])
         ->name('training-types.toggle-active');
+        
+    // Trainers routes
+Route::get('/trainers', [TrainerController::class, 'index'])->name('trainers.index');
+Route::get('/trainers/list', [TrainerController::class, 'list'])->name('trainers.list');
+Route::post('/trainers', [TrainerController::class, 'store'])->name('trainers.store');
+Route::put('/trainers/{id}', [TrainerController::class, 'update'])->name('trainers.update');
+Route::delete('/trainers/{id}', [TrainerController::class, 'destroy'])->name('trainers.destroy');
+Route::patch('/trainers/{id}/toggle-active', [TrainerController::class, 'toggleActive'])->name('trainers.toggle-active');
+Route::get('/trainers/export', [TrainerController::class, 'export'])->name('trainers.export');
 });
     require __DIR__.'/auth.php';

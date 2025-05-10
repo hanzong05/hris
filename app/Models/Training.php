@@ -9,98 +9,102 @@ class Training extends Model
 {
     use HasFactory;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'title',
         'description',
         'training_type_id',
+        'department',
         'start_date',
         'end_date',
         'location',
-        'trainer',
-        'department',
-        'status',
+        'trainer_id',  // This is the foreign key to trainers table
         'max_participants',
         'materials_link',
-        'created_by',
-        'updated_by',
+        'status'
     ];
 
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
     protected $casts = [
         'start_date' => 'datetime',
         'end_date' => 'datetime',
         'max_participants' => 'integer',
+        'training_type_id' => 'integer',
+        'trainer_id' => 'integer'
     ];
 
-    protected static function boot()
+    /**
+     * Get the trainer for this training.
+     */
+    public function trainer()
     {
-        parent::boot();
-        
-        static::creating(function ($model) {
-            if (auth()->check()) {
-                $model->created_by = auth()->id();
-                $model->updated_by = auth()->id();
-            }
-        });
-        
-        static::updating(function ($model) {
-            if (auth()->check()) {
-                $model->updated_by = auth()->id();
-            }
-        });
+        return $this->belongsTo(Trainer::class);
     }
 
+    /**
+     * Get the training type.
+     */
     public function type()
     {
         return $this->belongsTo(TrainingType::class, 'training_type_id');
     }
 
+    /**
+     * Get the participants in this training.
+     */
     public function participants()
     {
+        return $this->hasMany(TrainingParticipant::class);
+    }
+
+    /**
+     * Get the employees participating in this training (through pivot).
+     */
+    public function employees()
+    {
         return $this->belongsToMany(Employee::class, 'training_participants')
-                    ->withPivot('attendance_status')
+                    ->withPivot(['attendance_status', 'completion_status', 'score'])
                     ->withTimestamps();
     }
 
-    public function creator()
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function updater()
-    {
-        return $this->belongsTo(User::class, 'updated_by');
-    }
-
-    public function getDurationAttribute()
-    {
-        if (!$this->start_date || !$this->end_date) {
-            return 0;
-        }
-        
-        return $this->start_date->diffInDays($this->end_date);
-    }
-
-    public function getIsUpcomingAttribute()
-    {
-        if (!$this->start_date) {
-            return false;
-        }
-        
-        return $this->start_date->isFuture();
-    }
-
-    public function getIsOngoingAttribute()
-    {
-        if (!$this->start_date || !$this->end_date) {
-            return false;
-        }
-        
-        $now = now();
-        return $this->start_date->isPast() && $this->end_date->isFuture();
-    }
-
-    public function getAttendeeCountAttribute()
+    /**
+     * Get the count of participants.
+     */
+    public function getParticipantsCountAttribute()
     {
         return $this->participants()->count();
+    }
+
+    /**
+     * Scopes
+     */
+    public function scopeByStatus($query, $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    public function scopeUpcoming($query)
+    {
+        return $query->where('start_date', '>', now())
+                    ->where('status', 'Scheduled')
+                    ->orderBy('start_date');
+    }
+
+    public function scopeOngoing($query)
+    {
+        return $query->where('status', 'Ongoing');
+    }
+
+    public function scopeCompleted($query)
+    {
+        return $query->where('status', 'Completed');
     }
 }

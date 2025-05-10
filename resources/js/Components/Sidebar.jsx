@@ -255,7 +255,7 @@ const Sidebar = () => {
             items: [
                 { label: 'Training Lists', path: '/trainings' },      // FIXED
                 { label: 'Training Type', path: '/training-types' },  // FIXED
-                { label: 'Trainers', path: '/training/trainers' }
+                { label: 'Trainers', path: '/trainers' }
             ]
         },
         {

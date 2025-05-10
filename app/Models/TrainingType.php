@@ -12,9 +12,9 @@ class TrainingType extends Model
     protected $fillable = [
         'name',
         'description',
-        'is_active'
+        'is_active',
+        'image_url'
     ];
-
     protected $casts = [
         'is_active' => 'boolean'
     ];

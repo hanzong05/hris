@@ -21,9 +21,11 @@ import {
     CheckCircle,
     XCircle,
     Clock,
-    Link as LinkIcon,
+    Link,
     Download,
-    Eye
+    Eye,
+    Star,
+    Dumbbell,
 } from 'lucide-react';
 import { debounce } from 'lodash';
 import axios from 'axios';
@@ -61,7 +63,221 @@ const Toast = ({ message, type, onClose }) => {
     );
 };
 
-// Training Modal Component
+// Training Tabs Component
+const TrainingTabs = ({ trainingTypes, activeTab, onChange }) => {
+    return (
+        <div className="mb-6 border-b border-gray-200">
+            <div className="flex overflow-x-auto scrollbar-hide pb-1">
+                <button
+                    onClick={() => onChange('all')}
+                    className={`whitespace-nowrap px-4 py-2 font-medium text-sm rounded-t-lg ${
+                        activeTab === 'all'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                    }`}
+                >
+                    All Types
+                </button>
+                
+                {trainingTypes.map((type) => (
+                    <button
+                        key={type.id}
+                        onClick={() => onChange(type.id)}
+                        className={`whitespace-nowrap px-4 py-2 font-medium text-sm rounded-t-lg ${
+                            activeTab === type.id.toString()
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                        }`}
+                    >
+                        {type.name}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// Training Card Component
+const TrainingCard = ({ training, onView, onEdit, onDelete, onUpdateStatus }) => {
+    // Get status color for the badge
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'Scheduled':
+                return 'bg-blue-100 text-blue-800';
+            case 'Ongoing':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'Completed':
+                return 'bg-green-100 text-green-800';
+            case 'Cancelled':
+                return 'bg-red-100 text-red-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
+    };
+    
+    // Calculate duration between start and end date in minutes
+    const calculateDuration = () => {
+        if (!training.start_date || !training.end_date) return '0 mins';
+        const start = new Date(training.start_date);
+        const end = new Date(training.end_date);
+        const diff = Math.round((end - start) / (1000 * 60)); // in minutes
+        return `${diff} mins`;
+    };
+    
+    // Calculate a pseudo-rating based on training_type_id
+    const calculateRating = () => {
+        // Generate a pseudo-random but consistent rating between 4.0 and 5.0
+        const seed = parseInt(training.id) || 1;
+        const base = 4.0 + (seed % 11) / 10; // This gives values between 4.0 and 5.0
+        return Number(base.toFixed(1));
+    };
+
+    // Get random gradient based on training_type_id
+    const getGradient = () => {
+        const gradients = [
+            'from-orange-400 to-pink-500', // orange to pink
+            'from-blue-500 to-indigo-600',  // blue to indigo
+            'from-yellow-400 to-orange-500', // yellow to orange
+            'from-pink-500 to-purple-500',  // pink to purple
+            'from-green-400 to-teal-500',   // green to teal
+            'from-indigo-500 to-purple-600' // indigo to purple
+        ];
+        
+        const index = parseInt(training.training_type_id) % gradients.length;
+        return gradients[index];
+    };
+    
+    // Get a level based on training_type_id
+    const getLevel = () => {
+        const levels = ['Beginner', 'Intermediate', 'Advanced'];
+        const index = parseInt(training.training_type_id) % levels.length;
+        return levels[index];
+    };
+
+    return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200">
+            {/* Training Type Image or Gradient Header */}
+            <div className={`h-40 relative overflow-hidden`}>
+                {training.type && training.type.image_url ? (
+                    // Display training type image if available
+                    <img 
+                        src={training.type.image_url}
+                        alt={training.type.name || 'Training type'}
+                        className="w-full h-full object-cover"
+                    />
+                ) : (
+                    // Fallback to gradient if no image
+                    <div className={`h-full w-full bg-gradient-to-r ${getGradient()}`}></div>
+                )}
+                
+                {/* Overlay for better text visibility regardless of background */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                
+                {/* Level Badge */}
+                <div className="absolute top-2 left-2 bg-white bg-opacity-90 rounded-md px-2 py-1 text-xs font-medium">
+                    {getLevel()}
+                </div>
+                
+                {/* Training Type Name (only show if type exists) */}
+                {training.type && (
+                    <div className="absolute bottom-2 right-2 bg-white/80 rounded-md px-2 py-1 text-xs font-medium">
+                        {training.type.name}
+                    </div>
+                )}
+            </div>
+            
+            {/* Content - Keep the rest of the component unchanged */}
+            <div className="p-4">
+                <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-lg font-bold">{training.title}</h3>
+                    <div className="flex items-center">
+                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                        <span className="ml-1 text-sm font-medium">{calculateRating()}</span>
+                    </div>
+                </div>
+                
+                {/* Trainer & Duration */}
+                <div className="flex items-center text-sm text-gray-600 mb-2">
+                    <User className="h-4 w-4 mr-1" />
+                    <span className="font-medium">{training.trainer || 'No trainer'}</span>
+                    <span className="mx-1">•</span>
+                    <Clock className="h-4 w-4 mr-1" />
+                    <span>{calculateDuration()}</span>
+                </div>
+                
+                {/* Equipment or Status Badge */}
+                <div className="flex flex-wrap gap-1 mt-2">
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(training.status)}`}>
+                        {training.status}
+                    </span>
+                    
+                    {training.location && (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                            {training.location}
+                        </span>
+                    )}
+                    
+                    {training.department && (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                            {training.department}
+                        </span>
+                    )}
+                </div>
+                
+                {/* Participants count */}
+                <div className="mt-2 text-sm text-gray-600">
+                    <Users className="h-4 w-4 inline mr-1" />
+                    <span>{training.participants_count || 0}/{training.max_participants || '∞'} participants</span>
+                </div>
+                
+                {/* Actions */}
+                <div className="mt-4 flex justify-end space-x-2">
+                    <button
+                        onClick={() => onView(training)}
+                        className="p-1 text-gray-400 hover:text-gray-500"
+                        title="View Details"
+                        type="button"
+                    >
+                        <Eye className="h-5 w-5" />
+                    </button>
+                    
+                    <button
+                        onClick={() => onEdit(training)}
+                        className="p-1 text-gray-400 hover:text-gray-500"
+                        title="Edit"
+                        type="button"
+                    >
+                        <Edit className="h-5 w-5" />
+                    </button>
+                    
+                    <button
+                        onClick={() => onDelete(training)}
+                        className="p-1 text-gray-400 hover:text-red-500"
+                        title="Delete"
+                        type="button"
+                    >
+                        <Trash2 className="h-5 w-5" />
+                    </button>
+                    
+                    <div className="relative">
+                        <select
+                            onChange={(e) => onUpdateStatus(training, e.target.value)}
+                            value={training.status}
+                            className="text-xs border rounded px-1 py-1"
+                            title="Update Status"
+                        >
+                            <option value="Scheduled">Scheduled</option>
+                            <option value="Ongoing">Ongoing</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+// Updated Training Modal Component with Trainer Dropdown
 const TrainingModal = ({ 
     isOpen, 
     onClose, 
@@ -69,6 +285,8 @@ const TrainingModal = ({
     training,
     trainingTypes,
     employees,
+    departments,
+    trainers, // Add this prop
     onChange, 
     onSubmit,
     mode = 'create',
@@ -76,9 +294,109 @@ const TrainingModal = ({
 }) => {
     const isViewMode = mode === 'view';
     
+    // State for employee search
+    const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+    
+    // Get filtered employees based on selected department and search term
+    const getFilteredEmployees = useCallback(() => {
+        if (!Array.isArray(employees)) {
+            return [];
+        }
+        
+        // Start with employees filtered by department if one is selected
+        let filteredEmployees = employees;
+        
+        if (training.department) {
+            filteredEmployees = employees.filter(emp => 
+                emp.Department === training.department
+            );
+        }
+        
+        // Further filter by search term if provided
+        if (employeeSearchTerm.trim()) {
+            const searchTermLower = employeeSearchTerm.toLowerCase();
+            
+            filteredEmployees = filteredEmployees.filter(emp => {
+                const firstName = (emp.Fname || '').toLowerCase();
+                const lastName = (emp.Lname || '').toLowerCase();
+                const idNo = (emp.idno || '').toLowerCase();
+                const fullName = `${firstName} ${lastName}`.toLowerCase();
+                const fullNameReversed = `${lastName} ${firstName}`.toLowerCase();
+                const department = (emp.Department || '').toLowerCase();
+                
+                return firstName.includes(searchTermLower) || 
+                       lastName.includes(searchTermLower) || 
+                       idNo.includes(searchTermLower) ||
+                       fullName.includes(searchTermLower) ||
+                       fullNameReversed.includes(searchTermLower) ||
+                       department.includes(searchTermLower);
+            });
+        }
+        
+        return filteredEmployees;
+    }, [employees, training.department, employeeSearchTerm]);
+    
+    // Get filtered employees for selection
+    const filteredEmployees = getFilteredEmployees();
+    
+    // Get all selected employees (even if they don't match current filters)
+    const selectedEmployees = useCallback(() => {
+        if (!Array.isArray(employees) || !training.participants?.length) {
+            return [];
+        }
+        
+        return employees.filter(emp => training.participants.includes(emp.id));
+    }, [employees, training.participants]);
+    
+    // Combine selected employees (on top) with filtered unselected employees (below)
+    const displayEmployees = useCallback(() => {
+        const selected = selectedEmployees();
+        const filteredUnselected = filteredEmployees.filter(emp => !training.participants?.includes(emp.id));
+        
+        // Show selected employees first, then filtered unselected employees
+        return [...selected, ...filteredUnselected];
+    }, [filteredEmployees, selectedEmployees, training.participants]);
+    
+    // Handle select all
+    const handleSelectAll = () => {
+        const allFilteredEmployeeIds = filteredEmployees.map(emp => emp.id);
+        onChange({...training, participants: allFilteredEmployeeIds});
+    };
+    
+    // Handle deselect all
+    const handleDeselectAll = () => {
+        onChange({...training, participants: []});
+    };
+    
+    // Reset search term when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setEmployeeSearchTerm('');
+        }
+    }, [isOpen]);
+    
+    // Helper function to extract participant name
+    const getParticipantName = (participant) => {
+        if (participant.employee) {
+            return `${participant.employee.Fname || ''} ${participant.employee.Lname || ''}`.trim();
+        }
+        if (participant.Fname || participant.Lname) {
+            return `${participant.Fname || ''} ${participant.Lname || ''}`.trim();
+        }
+        return 'Unknown Participant';
+    };
+    
+    // Display count of employees from current department
+    const departmentEmployeeCount = training.department 
+        ? employees.filter(e => e.Department === training.department).length 
+        : employees.length;
+    
+    // Check if we have selected participants
+    const hasSelectedParticipants = (training.participants?.length || 0) > 0;
+    
     return (
-        <Modal show={isOpen} onClose={onClose} maxWidth="md">
-            <div className="p-6">
+        <Modal show={isOpen} onClose={onClose} maxWidth="2xl">
+            <div className="p-4">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">{title}</h2>
                     <button 
@@ -91,324 +409,397 @@ const TrainingModal = ({
                 
                 {isViewMode ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Title</label>
-                                    <p className="mt-1 text-sm text-gray-900">{training?.title}</p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Type</label>
-                                    <p className="mt-1 text-sm text-gray-900">{training?.type?.name}</p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Department</label>
-                                    <p className="mt-1 text-sm text-gray-900">{training?.department || '-'}</p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Status</label>
-                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                        training?.status === 'Scheduled' ? 'bg-blue-100 text-blue-800' :
-                                        training?.status === 'Ongoing' ? 'bg-yellow-100 text-yellow-800' :
-                                        training?.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                                        'bg-red-100 text-red-800'
-                                    }`}>
-                                        {training?.status}
-                                    </span>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Start Date</label>
-                                    <p className="mt-1 text-sm text-gray-900">
-                                        {moment(training?.start_date).format('MMM DD, YYYY h:mm A')}
-                                    </p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">End Date</label>
-                                    <p className="mt-1 text-sm text-gray-900">
-                                        {moment(training?.end_date).format('MMM DD, YYYY h:mm A')}
-                                    </p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Location</label>
-                                    <p className="mt-1 text-sm text-gray-900">{training?.location || '-'}</p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Trainer</label>
-                                    <p className="mt-1 text-sm text-gray-900">{training?.trainer || '-'}</p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Max Participants</label>
-                                    <p className="mt-1 text-sm text-gray-900">{training?.max_participants || '∞'}</p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Current Participants</label>
-                                    <p className="mt-1 text-sm text-gray-900">{training?.participants_count || 0}</p>
-                                </div>
-                            </div>
-                            
-                            <div className="mt-4">
-                                <label className="block text-sm font-medium text-gray-700">Description</label>
-                                <p className="mt-1 text-sm text-gray-900">{training?.description || '-'}</p>
-                            </div>
-                            
-                            {training?.materials_link && (
-                                <div className="mt-4">
-                                    <label className="block text-sm font-medium text-gray-700">Materials Link</label>
-                                    <a href={training.materials_link} target="_blank" rel="noopener noreferrer" 
-                                       className="mt-1 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
-                                        <LinkIcon size={14} />
-                                        {training.materials_link}
-                                    </a>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Participants List */}
-                        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                            <h4 className="text-md font-medium text-gray-900 mb-3">Participants</h4>
-                            <div className="max-h-96 overflow-y-auto">
-                                {training?.participants?.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {training.participants.map((participant, index) => (
-                                            <div key={participant.id} className="flex justify-between items-center p-2 bg-white rounded">
-                                                <div>
-                                                    <span className="font-medium">{index + 1}. </span>
-                                                    {participant.employee?.Fname} {participant.employee?.Lname}
-                                                </div>
-                                                <span className={`px-2 py-1 text-xs rounded ${
-                                                    participant.attendance_status === 'Attended' ? 'bg-green-100 text-green-800' :
-                                                    participant.attendance_status === 'Absent' ? 'bg-red-100 text-red-800' :
-                                                    participant.attendance_status === 'Cancelled' ? 'bg-gray-100 text-gray-800' :
-                                                    'bg-blue-100 text-blue-800'
-                                                }`}>
-                                                    {participant.attendance_status}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-gray-500">No participants registered yet</p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <form onSubmit={onSubmit} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                                <input
-                                    type="text"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.title ? 'border-red-500' : ''}`}
-                                    value={training.title || ''}
-                                    onChange={(e) => onChange({...training, title: e.target.value})}
-                                    placeholder="e.g. Customer Service Training"
-                                    required
-                                    disabled={isViewMode}
-                                />
-                                {errorMessages.title && <p className="mt-1 text-sm text-red-600">{errorMessages.title}</p>}
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Training Type *</label>
-                                <select
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errorMessages.training_type_id ? 'border-red-500' : ''}`}
-                                    value={training.training_type_id || ''}
-                                    onChange={(e) => onChange({...training, training_type_id: e.target.value})}
-                                    required
-                                    disabled={isViewMode}
-                                >
-                                    <option value="">Select Training Type</option>
-                                    {trainingTypes.map(type => (
-                                        <option key={type.id} value={type.id}>{type.name}</option>
-                                    ))}
-                                </select>
-                                {errorMessages.training_type_id && <p className="mt-1 text-sm text-red-600">{errorMessages.training_type_id}</p>}
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                                <input
-                                    type="text"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.department ? 'border-red-500' : ''}`}
-                                    value={training.department || ''}
-                                    onChange={(e) => onChange({...training, department: e.target.value})}
-                                    placeholder="e.g. Human Resources, Marketing"
-                                    disabled={isViewMode}
-                                />
-                                {errorMessages.department && <p className="mt-1 text-sm text-red-600">{errorMessages.department}</p>}
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
-                                <select
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.status ? 'border-red-500' : ''}`}
-                                    value={training.status || 'Scheduled'}
-                                    onChange={(e) => onChange({...training, status: e.target.value})}
-                                    disabled={isViewMode}
-                                >
-                                    <option value="Scheduled">Scheduled</option>
-                                    <option value="Ongoing">Ongoing</option>
-                                    <option value="Completed">Completed</option>
-                                    <option value="Cancelled">Cancelled</option>
-                                </select>
-                                {errorMessages.status && <p className="mt-1 text-sm text-red-600">{errorMessages.status}</p>}
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
-                                <input
-                                    type="datetime-local"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.start_date ? 'border-red-500' : ''}`}
-                                    value={training.start_date || ''}
-                                    onChange={(e) => onChange({...training, start_date: e.target.value})}
-                                    required
-                                    disabled={isViewMode}
-                                />
-                                {errorMessages.start_date && <p className="mt-1 text-sm text-red-600">{errorMessages.start_date}</p>}
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
-                                <input
-                                    type="datetime-local"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.end_date ? 'border-red-500' : ''}`}
-                                    value={training.end_date || ''}
-                                    onChange={(e) => onChange({...training, end_date: e.target.value})}
-                                    required
-                                    disabled={isViewMode}
-                                />
-                                {errorMessages.end_date && <p className="mt-1 text-sm text-red-600">{errorMessages.end_date}</p>}
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                <input
-                                    type="text"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.location ? 'border-red-500' : ''}`}
-                                    value={training.location || ''}
-                                    onChange={(e) => onChange({...training, location: e.target.value})}
-                                    placeholder="e.g. Conference Room A, Virtual"
-                                    disabled={isViewMode}
-                                />
-                                {errorMessages.location && <p className="mt-1 text-sm text-red-600">{errorMessages.location}</p>}
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Trainer</label>
-                                <input
-                                    type="text"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.trainer ? 'border-red-500' : ''}`}
-                                    value={training.trainer || ''}
-                                    onChange={(e) => onChange({...training, trainer: e.target.value})}
-                                    placeholder="e.g. John Smith, External Consultant"
-                                    disabled={isViewMode}
-                                />
-                                {errorMessages.trainer && <p className="mt-1 text-sm text-red-600">{errorMessages.trainer}</p>}
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
-                                <input
-                                    type="number"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.max_participants ? 'border-red-500' : ''}`}
-                                    value={training.max_participants || ''}
-                                    onChange={(e) => onChange({...training, max_participants: e.target.value})}
-                                    placeholder="e.g. 20"
-                                    min="1"
-                                    disabled={isViewMode}
-                                />
-                                {errorMessages.max_participants && <p className="mt-1 text-sm text-red-600">{errorMessages.max_participants}</p>}
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Materials Link</label>
-                                <input
-                                    type="url"
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.materials_link ? 'border-red-500' : ''}`}
-                                    value={training.materials_link || ''}
-                                    onChange={(e) => onChange({...training, materials_link: e.target.value})}
-                                    placeholder="https://example.com/materials"
-                                    disabled={isViewMode}
-                                />
-                                {errorMessages.materials_link && <p className="mt-1 text-sm text-red-600">{errorMessages.materials_link}</p>}
-                            </div>
+                        {/* View mode content */}
+                        <div>
+                            <h3 className="font-medium text-gray-900">Title</h3>
+                            <p className="text-gray-600">{training.title}</p>
                         </div>
                         
                         <div>
+                            <h3 className="font-medium text-gray-900">Training Type</h3>
+                            <p className="text-gray-600">{training.type?.name || 'N/A'}</p>
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-medium text-gray-900">Department</h3>
+                            <p className="text-gray-600">{training.department || 'N/A'}</p>
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-medium text-gray-900">Status</h3>
+                            <p className="text-gray-600">{training.status}</p>
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-medium text-gray-900">Start Date</h3>
+                            <p className="text-gray-600">{training.start_date ? moment(training.start_date).format('MMMM D, YYYY h:mm A') : 'N/A'}</p>
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-medium text-gray-900">End Date</h3>
+                            <p className="text-gray-600">{training.end_date ? moment(training.end_date).format('MMMM D, YYYY h:mm A') : 'N/A'}</p>
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-medium text-gray-900">Location</h3>
+                            <p className="text-gray-600">{training.location || 'N/A'}</p>
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-medium text-gray-900">Trainer</h3>
+                            <p className="text-gray-600">
+                                {training.trainer?.name || 'No trainer assigned'}
+                                {training.trainer?.is_external ? ' (External)' : ''}
+                                {training.trainer?.company ? ` - ${training.trainer.company}` : ''}
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-medium text-gray-900">Max Participants</h3>
+                            <p className="text-gray-600">{training.max_participants || 'Unlimited'}</p>
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-medium text-gray-900">Materials Link</h3>
+                            <p className="text-gray-600">
+                                {training.materials_link ? (
+                                    <a href={training.materials_link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                        View Materials
+                                    </a>
+                                ) : 'N/A'}
+                            </p>
+                        </div>
+                        
+                        <div className="md:col-span-2">
+                            <h3 className="font-medium text-gray-900">Description</h3>
+                            <p className="text-gray-600">{training.description || 'No description provided'}</p>
+                        </div>
+                        
+                        <div className="md:col-span-2">
+                            <h3 className="font-medium text-gray-900 mb-2">
+                                Participants ({training.participants?.length || 0})
+                            </h3>
+                            {training.participants && training.participants.length > 0 ? (
+                                <ul className="space-y-1">
+                                    {training.participants.map((participant, index) => (
+                                        <li key={index} className="text-gray-600">
+                                            • {getParticipantName(participant)}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-gray-600">No participants registered</p>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <form onSubmit={onSubmit} className="space-y-3">
+                        {/* Two columns layout for form fields */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                            {/* Left Column */}
+                            <div>
+                                {/* Title */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                                    <input
+                                        type="text"
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.title ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.title || ''}
+                                        onChange={(e) => onChange({...training, title: e.target.value})}
+                                        placeholder="e.g. Customer Service Training"
+                                        required
+                                    />
+                                    {errorMessages.title && <p className="mt-1 text-xs text-red-600">{errorMessages.title}</p>}
+                                </div>
+
+                                {/* Department */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
+                                    <select
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.department ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.department || ''}
+                                        onChange={(e) => onChange({...training, department: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Department</option>
+                                        {Array.isArray(departments) && departments.map(dept => (
+                                            <option key={dept.id} value={dept.name}>{dept.name}</option>
+                                        ))}
+                                    </select>
+                                    {errorMessages.department && <p className="mt-1 text-xs text-red-600">{errorMessages.department}</p>}
+                                </div>
+
+                                {/* Start Date */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+                                    <input
+                                        type="datetime-local"
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.start_date ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.start_date ? moment(training.start_date).format('YYYY-MM-DDTHH:mm') : ''}
+                                        onChange={(e) => onChange({...training, start_date: e.target.value})}
+                                        required
+                                    />
+                                    {errorMessages.start_date && <p className="mt-1 text-xs text-red-600">{errorMessages.start_date}</p>}
+                                </div>
+
+                                {/* Location */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                    <input
+                                        type="text"
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.location ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.location || ''}
+                                        onChange={(e) => onChange({...training, location: e.target.value})}
+                                        placeholder="e.g. Conference Room A"
+                                    />
+                                    {errorMessages.location && <p className="mt-1 text-xs text-red-600">{errorMessages.location}</p>}
+                                </div>
+
+                                {/* Max Participants */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
+                                    <input
+                                        type="number"
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.max_participants ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.max_participants || ''}
+                                        onChange={(e) => onChange({...training, max_participants: e.target.value})}
+                                        placeholder="e.g. 20"
+                                        min="1"
+                                    />
+                                    {errorMessages.max_participants && <p className="mt-1 text-xs text-red-600">{errorMessages.max_participants}</p>}
+                                </div>
+                            </div>
+
+                            {/* Right Column */}
+                            <div>
+                                {/* Training Type */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Training Type *</label>
+                                    <select
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.training_type_id ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.training_type_id || ''}
+                                        onChange={(e) => onChange({...training, training_type_id: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Training Type</option>
+                                        {trainingTypes.map(type => (
+                                            <option key={type.id} value={type.id}>{type.name}</option>
+                                        ))}
+                                    </select>
+                                    {errorMessages.training_type_id && <p className="mt-1 text-xs text-red-600">{errorMessages.training_type_id}</p>}
+                                </div>
+
+                                {/* Status */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+                                    <select
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.status ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.status || 'Scheduled'}
+                                        onChange={(e) => onChange({...training, status: e.target.value})}
+                                    >
+                                        <option value="Scheduled">Scheduled</option>
+                                        <option value="Ongoing">Ongoing</option>
+                                        <option value="Completed">Completed</option>
+                                        <option value="Cancelled">Cancelled</option>
+                                    </select>
+                                    {errorMessages.status && <p className="mt-1 text-xs text-red-600">{errorMessages.status}</p>}
+                                </div>
+
+                                {/* End Date */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
+                                    <input
+                                        type="datetime-local"
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.end_date ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.end_date ? moment(training.end_date).format('YYYY-MM-DDTHH:mm') : ''}
+                                        onChange={(e) => onChange({...training, end_date: e.target.value})}
+                                        required
+                                    />
+                                    {errorMessages.end_date && <p className="mt-1 text-xs text-red-600">{errorMessages.end_date}</p>}
+                                </div>
+
+                                {/* Trainer Dropdown */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Trainer</label>
+                                    <select
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.trainer_id ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.trainer_id || ''}
+                                        onChange={(e) => onChange({...training, trainer_id: e.target.value})}
+                                    >
+                                        <option value="">Select Trainer</option>
+                                        {trainers && trainers.map(trainer => (
+                                            <option key={trainer.id} value={trainer.id}>
+                                                {trainer.name}
+                                                {trainer.is_external ? ' (External)' : ' (Internal)'}
+                                                {trainer.company ? ` - ${trainer.company}` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errorMessages.trainer_id && <p className="mt-1 text-xs text-red-600">{errorMessages.trainer_id}</p>}
+                                </div>
+
+                                {/* Materials Link */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Materials Link</label>
+                                    <input
+                                        type="url"
+                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.materials_link ? 'border-red-500' : 'border-gray-300'}`}
+                                        value={training.materials_link || ''}
+                                        onChange={(e) => onChange({...training, materials_link: e.target.value})}
+                                        placeholder="https://example.com/materials"
+                                    />
+                                    {errorMessages.materials_link && <p className="mt-1 text-xs text-red-600">{errorMessages.materials_link}</p>}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Description - Full width */}
+                        <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                             <textarea
-                                className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isViewMode ? 'bg-gray-100' : ''} ${errorMessages.description ? 'border-red-500' : ''}`}
+                                className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.description ? 'border-red-500' : 'border-gray-300'}`}
                                 value={training.description || ''}
                                 onChange={(e) => onChange({...training, description: e.target.value})}
                                 placeholder="Details about the training program"
                                 rows="3"
-                                disabled={isViewMode}
                             />
-                            {errorMessages.description && <p className="mt-1 text-sm text-red-600">{errorMessages.description}</p>}
+                            {errorMessages.description && <p className="mt-1 text-xs text-red-600">{errorMessages.description}</p>}
                         </div>
                         
+                        {/* Participants Section */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Participants</label>
-                            <div className="max-h-48 overflow-y-auto border rounded-md p-2">
-                                {Array.isArray(employees) && employees.length > 0 ? (
-                                    employees.map(employee => (
-                                        <div key={employee.id} className="flex items-center mb-2">
-                                            <input
-                                                type="checkbox"
-                                                id={`employee-${employee.id}`}
-                                                checked={training.participants?.includes(employee.id)}
-                                                onChange={() => {
-                                                    const participants = [...(training.participants || [])];
-                                                    const index = participants.indexOf(employee.id);
-                                                    if (index > -1) {
-                                                        participants.splice(index, 1);
-                                                    } else {
-                                                        participants.push(employee.id);
-                                                    }
-                                                    onChange({...training, participants});
-                                                }}
-                                                className="mr-2"
-                                                disabled={isViewMode}
-                                            />
-                                            <label htmlFor={`employee-${employee.id}`} className="text-sm">
-                                                {employee.Fname} {employee.Lname} - {employee.Department || 'No Department'}
-                                            </label>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-500">No employees available</p>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Participants</label>
+                                <div className="text-xs text-gray-500">
+                                    {departmentEmployeeCount} employee{departmentEmployeeCount !== 1 ? 's' : ''} 
+                                    {training.department ? ` from ${training.department}` : ''}
+                                </div>
+                            </div>
+                            
+                            {/* Search and Select/Deselect Controls */}
+                            <div className="flex items-center mb-2 space-x-2">
+                                <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
+                                        placeholder="Search employees..."
+                                        value={employeeSearchTerm}
+                                        onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                                
+                                {filteredEmployees.length > 0 && 
+                                 filteredEmployees.some(employee => !training.participants?.includes(employee.id)) && (
+                                    <button
+                                        type="button"
+                                        onClick={handleSelectAll}
+                                        className="px-4 py-2 border rounded-md text-sm font-medium bg-green-50 text-green-700 border-green-200 hover:bg-green-100 transition-all duration-200"
+                                    >
+                                        Select All
+                                    </button>
                                 )}
+                                
+                                {hasSelectedParticipants && (
+                                    <button
+                                        type="button"
+                                        onClick={handleDeselectAll}
+                                        className="px-4 py-2 border rounded-md text-sm font-medium bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 transition-all duration-200"
+                                    >
+                                        Deselect All
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {/* Employee Selection List */}
+                            <div className="max-h-48 overflow-y-auto border rounded-md">
+                                {displayEmployees().length > 0 ? (
+                                    <div>
+                                        {displayEmployees()
+                                            .map(employee => {
+                                                const isSelected = training.participants?.includes(employee.id);
+                                                const isFromCurrentDepartment = !training.department || employee.Department === training.department;
+                                                const matchesSearch = !employeeSearchTerm || filteredEmployees.includes(employee);
+                                                
+                                                return (
+                                                    <div 
+                                                        key={`employee-${employee.id}`} 
+                                                        className={`px-4 py-2 border-b last:border-b-0 ${
+                                                            isSelected 
+                                                                ? 'bg-indigo-50' 
+                                                                : 'hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            <input
+                                                                type="checkbox"
+                                                                id={`employee-${employee.id}`}
+                                                                checked={isSelected || false}
+                                                                onChange={() => {
+                                                                    const participants = [...(training.participants || [])];
+                                                                    const index = participants.indexOf(employee.id);
+                                                                    if (index > -1) {
+                                                                        participants.splice(index, 1);
+                                                                    } else {
+                                                                        participants.push(employee.id);
+                                                                    }
+                                                                    onChange({...training, participants});
+                                                                }}
+                                                                className="mr-3 h-4 w-4"
+                                                            />
+                                                            <div className="flex-1">
+                                                                <label htmlFor={`employee-${employee.id}`} className="block font-medium text-sm cursor-pointer">
+                                                                    {employee.Lname}, {employee.Fname} {employee.idno && `(${employee.idno})`}
+                                                                </label>
+                                                                <p className="text-xs text-gray-500">
+                                                                    {employee.Department || 'No Department'}
+                                                                    {isSelected && (!isFromCurrentDepartment || !matchesSearch) && (
+                                                                        <span className="ml-2 text-indigo-600">(Selected)</span>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        }
+                                    </div>
+                                ) : (
+                                    <div className="p-4 text-center text-sm text-gray-500">
+                                        {training.department && !employeeSearchTerm
+                                            ? `No employees found in ${training.department}`
+                                            : employeeSearchTerm
+                                                ? "No employees match your search"
+                                                : "No employees available"}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Selected Count */}
+                            <div className="mt-1 text-xs text-right text-gray-500">
+                                {(training.participants?.length || 0)} selected
                             </div>
                         </div>
                         
-                        <div className="flex justify-end mt-6">
+                        {/* Action Buttons */}
+                        <div className="flex justify-end mt-4">
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => onClose(false)}
                                 className="mr-2"
                             >
-                                {isViewMode ? 'Close' : 'Cancel'}
+                                Cancel
                             </Button>
                             
-                            {!isViewMode && (
-                                <Button
-                                    type="submit"
-                                    className="bg-blue-600 text-white hover:bg-blue-700"
-                                >
-                                    <Save className="w-4 h-4 mr-2" />
-                                    {mode === 'create' ? 'Save Training' : 'Update Training'}
-                                </Button>
-                            )}
+                            <Button
+                                type="submit"
+                                className="bg-blue-600 text-white hover:bg-blue-700"
+                            >
+                                Save Training
+                            </Button>
                         </div>
                     </form>
                 )}
@@ -416,8 +807,7 @@ const TrainingModal = ({
         </Modal>
     );
 };
-
-// Main Training Component
+// Main Training Component with Department Dropdown
 const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, employees, currentStatus }) => {
     // Safely get user from page props
     const user = auth?.user || {};
@@ -426,6 +816,11 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState(currentStatus || 'all');
+    const [typeFilter, setTypeFilter] = useState('all');
+    
+    // Add departments state
+    const [departments, setDepartments] = useState([]);
+    const [loadingDepartments, setLoadingDepartments] = useState(false);
     
     // Toast state
     const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
@@ -465,26 +860,62 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
         onConfirm: () => {}
     });
 
-    // Load data
+    // Load training data with better error handling
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
             const response = await axios.get('/trainings/list', {
                 params: { status: statusFilter }
             });
+            
+            // Debug: Check what data is coming from backend
+            console.log('Training data received:', response.data.data);
+            
             setTrainings(response.data.data || []);
         } catch (error) {
-            console.error('Error loading data:', error);
-            showToast('Error loading data: ' + (error.response?.data?.message || error.message), 'error');
+            console.error('Error loading training data:', error);
+            showToast('Error loading training data: ' + (error.response?.data?.message || error.message), 'error');
         } finally {
             setLoading(false);
         }
     }, [statusFilter]);
 
+    // Load departments data with better error handling
+    const loadDepartments = useCallback(async () => {
+        setLoadingDepartments(true);
+        try {
+            // Fetch departments using the DepartmentController endpoint
+            const response = await axios.get('/departments');
+            
+            // Log for debugging
+            console.log('Departments loaded:', response.data.data);
+            
+            // Filter only active departments if applicable
+            const activeDepartments = response.data.data 
+                ? response.data.data.filter(dept => dept.is_active === true)
+                : [];
+            
+            // Set departments from the response
+            setDepartments(activeDepartments);
+        } catch (error) {
+            console.error('Error loading departments:', error);
+            showToast('Error loading departments: ' + (error.response?.data?.message || error.message), 'error');
+            // Set empty array to prevent further errors
+            setDepartments([]);
+        } finally {
+            setLoadingDepartments(false);
+        }
+    }, []);
+
     // Load data on component mount and when filters change
     useEffect(() => {
         loadData();
     }, [loadData]);
+    
+    // Load departments on component mount
+    useEffect(() => {
+        loadDepartments();
+    }, [loadDepartments]);
 
     // Show toast notification
     const showToast = (message, type = 'success') => {
@@ -514,29 +945,99 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
         setIsCreateModalOpen(true);
     };
 
-    // Handle editing training
-    const handleEditClick = (training) => {
-        setCurrentTraining({
-            ...training,
-            participants: training.participants?.map(p => p.employee_id) || []
-        });
-        setErrors({});
-        setIsEditModalOpen(true);
+    // Handle editing training (WITH DEPARTMENT HANDLING)
+    const handleEditClick = async (training) => {
+        try {
+            // Fetch full training details including participants
+            const response = await axios.get(`/trainings/${training.id}`);
+            const fullTraining = response.data;
+            
+            setCurrentTraining({
+                ...fullTraining,
+                participants: fullTraining.participants?.map(p => p.employee_id) || []
+            });
+            setErrors({});
+            setIsEditModalOpen(true);
+            
+            // Make sure departments are loaded
+            if (departments.length === 0 && !loadingDepartments) {
+                loadDepartments();
+            }
+        } catch (error) {
+            console.error('Error fetching training details:', error);
+            // Fallback to original data
+            setCurrentTraining({
+                ...training,
+                participants: training.participants?.map(p => p.employee_id) || []
+            });
+            setErrors({});
+            setIsEditModalOpen(true);
+        }
     };
 
-    // Handle viewing training
-    const handleViewClick = (training) => {
-        setCurrentTraining(training);
-        setIsViewModalOpen(true);
+    // Handle viewing training (WITH DEPARTMENT HANDLING)
+    const handleViewClick = async (training) => {
+        try {
+            // Fetch full training details including participants with employee data
+            const response = await axios.get(`/trainings/${training.id}`);
+            console.log('Full training data:', response.data);
+            setCurrentTraining(response.data);
+            setIsViewModalOpen(true);
+            
+            // Make sure departments are loaded
+            if (departments.length === 0 && !loadingDepartments) {
+                loadDepartments();
+            }
+        } catch (error) {
+            console.error('Error fetching training details:', error);
+            // Fallback to existing data
+            setCurrentTraining(training);
+            setIsViewModalOpen(true);
+        }
     };
-
-    // Handle creating new training
+    
+    // Handle creating new training (WITH DEPARTMENT HANDLING)
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
         setErrors({});
         
         try {
-            const response = await axios.post('/trainings', currentTraining);
+            // Prepare training data with careful handling of empty values
+            const trainingData = {
+                title: currentTraining.title || '',
+                training_type_id: currentTraining.training_type_id ? parseInt(currentTraining.training_type_id) : null,
+                department: currentTraining.department || '',  // Department from dropdown
+                status: currentTraining.status || 'Scheduled',
+                start_date: currentTraining.start_date ? moment(currentTraining.start_date).format('YYYY-MM-DD HH:mm:ss') : null,
+                end_date: currentTraining.end_date ? moment(currentTraining.end_date).format('YYYY-MM-DD HH:mm:ss') : null,
+            };
+            
+            // Only add optional fields if they have values
+            if (currentTraining.description) {
+                trainingData.description = currentTraining.description;
+            }
+            if (currentTraining.location) {
+                trainingData.location = currentTraining.location;
+            }
+            if (currentTraining.trainer) {
+                trainingData.trainer = currentTraining.trainer;
+            }
+            if (currentTraining.max_participants) {
+                trainingData.max_participants = parseInt(currentTraining.max_participants);
+            }
+            if (currentTraining.materials_link) {
+                trainingData.materials_link = currentTraining.materials_link;
+            }
+            
+            // Handle participants separately
+            if (currentTraining.participants && currentTraining.participants.length > 0) {
+                trainingData.participants = currentTraining.participants;
+            }
+            
+            console.log('Sending training data:', trainingData);
+            
+            // Try to create training
+            const response = await axios.post('/trainings', trainingData);
             
             // Update trainings list
             await loadData();
@@ -549,22 +1050,41 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
         } catch (error) {
             console.error('Error creating training:', error);
             
-            // Handle validation errors
             if (error.response?.status === 422 && error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
+                const errorMessages = Object.values(error.response.data.errors).flat().join(', ');
+                showToast(`Validation error: ${errorMessages}`, 'error');
             } else {
                 showToast(error.response?.data?.message || 'Error creating training', 'error');
             }
         }
     };
 
-    // Handle updating training
+    // Handle updating training (WITH DEPARTMENT HANDLING)
     const handleUpdateSubmit = async (e) => {
         e.preventDefault();
         setErrors({});
         
         try {
-            const response = await axios.put(`/trainings/${currentTraining.id}`, currentTraining);
+            // Prepare training data
+            const trainingData = {
+                title: currentTraining.title,
+                description: currentTraining.description,
+                training_type_id: parseInt(currentTraining.training_type_id) || null,
+                department: currentTraining.department || '',  // Department from dropdown
+                start_date: currentTraining.start_date ? moment(currentTraining.start_date).format('YYYY-MM-DD HH:mm:ss') : null,
+                end_date: currentTraining.end_date ? moment(currentTraining.end_date).format('YYYY-MM-DD HH:mm:ss') : null,
+                location: currentTraining.location,
+                trainer: currentTraining.trainer,
+                max_participants: currentTraining.max_participants ? parseInt(currentTraining.max_participants) : null,
+                materials_link: currentTraining.materials_link,
+                status: currentTraining.status || 'Scheduled',
+                participants: currentTraining.participants || []
+            };
+            
+            console.log('Updating training data:', trainingData);
+            
+            const response = await axios.put(`/trainings/${currentTraining.id}`, trainingData);
             
             // Update trainings list
             await loadData();
@@ -577,15 +1097,16 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
         } catch (error) {
             console.error('Error updating training:', error);
             
-            // Handle validation errors
             if (error.response?.status === 422 && error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
+                const errorMessages = Object.values(error.response.data.errors).flat().join(', ');
+                showToast(`Validation error: ${errorMessages}`, 'error');
             } else {
                 showToast(error.response?.data?.message || 'Error updating training', 'error');
             }
         }
     };
-
+    
     // Handle deleting training
     const handleDeleteClick = (training) => {
         setConfirmModal({
@@ -616,6 +1137,7 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
     const handleResetFilters = () => {
         setSearchTerm('');
         setStatusFilter('all');
+        setTypeFilter('all');
         
         // Reset the search input field
         const searchInput = document.querySelector('input[placeholder="Search trainings..."]');
@@ -661,31 +1183,20 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
             showToast('Error updating training status', 'error');
         }
     };
-
-    // Filter trainings by search term
-    const filteredTrainings = trainings.filter(training => 
-        training.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        training.trainer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        training.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        training.type?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Get status color
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'Scheduled':
-                return 'bg-blue-100 text-blue-800';
-            case 'Ongoing':
-                return 'bg-yellow-100 text-yellow-800';
-            case 'Completed':
-                return 'bg-green-100 text-green-800';
-            case 'Cancelled':
-                return 'bg-red-100 text-red-800';
-            default:
-                return 'bg-gray-100 text-gray-800';
-        }
-    };
-
+    
+    // Filter trainings by search term, status, and type
+    const filteredTrainings = trainings.filter(training => {
+        const matchesSearch = !searchTerm || 
+            training.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            training.trainer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            training.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            training.type?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        const matchesType = typeFilter === 'all' || training.training_type_id?.toString() === typeFilter.toString();
+        
+        return matchesSearch && matchesType;
+    });
+    
     return (
         <AuthenticatedLayout>
             <Head title="Training Management" />
@@ -792,7 +1303,7 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                                     Export
                                 </Button>
                                 
-                                {(searchTerm || statusFilter !== 'all') && (
+                                {(searchTerm || statusFilter !== 'all' || typeFilter !== 'all') && (
                                     <Button
                                         onClick={handleResetFilters}
                                         variant="outline"
@@ -803,6 +1314,13 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                                 )}
                             </div>
                         </div>
+                        
+                        {/* Training Type Tabs */}
+                        <TrainingTabs 
+                            trainingTypes={trainingTypes} 
+                            activeTab={typeFilter} 
+                            onChange={setTypeFilter}
+                        />
 
                         {/* Training Cards */}
                         <div className="mb-8">
@@ -816,7 +1334,7 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                             {/* No Results */}
                             {!loading && filteredTrainings.length === 0 && (
                                 <div className="py-16 text-center text-gray-500">
-                                    {searchTerm || statusFilter !== 'all'
+                                    {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
                                         ? 'No trainings found matching your filters.'
                                         : 'No trainings found. Create a new training to get started.'}
                                 </div>
@@ -826,102 +1344,14 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                             {!loading && filteredTrainings.length > 0 && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {filteredTrainings.map(training => (
-                                        <div 
+                                        <TrainingCard
                                             key={training.id}
-                                            className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200"
-                                        >
-                                            {/* Training Type Header */}
-                                            <div className="h-16 bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center">
-                                                <span className="text-lg font-semibold text-white">{training.type?.name || 'Training'}</span>
-                                            </div>
-                                            
-                                            {/* Training Details */}
-                                            <div className="p-5">
-                                                <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                                                    {training.title}
-                                                </h3>
-                                                
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(training.status)}`}>
-                                                        {training.status}
-                                                    </span>
-                                                    
-                                                    <div className="text-sm text-gray-600">
-                                                        <span className="font-medium">{training.participants_count || 0}</span>/{training.max_participants || '∞'} participants
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                    <User className="h-4 w-4 mr-1" />
-                                                    <span>{training.trainer || 'No trainer assigned'}</span>
-                                                </div>
-                                                
-                                                <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                    <MapPin className="h-4 w-4 mr-1" />
-                                                    <span>{training.location || 'No location specified'}</span>
-                                                </div>
-                                                
-                                                <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                    <Calendar className="h-4 w-4 mr-1" />
-                                                    <span>{moment(training.start_date).format('MMM DD, YYYY')}</span>
-                                                </div>
-                                                
-                                                <div className="flex items-center text-sm text-gray-600 mb-4">
-                                                    <Clock className="h-4 w-4 mr-1" />
-                                                    <span>{moment(training.start_date).format('h:mm A')} - {moment(training.end_date).format('h:mm A')}</span>
-                                                </div>
-                                                
-                                                {training.description && (
-                                                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                                                        {training.description}
-                                                    </p>
-                                                )}
-                                                
-                                                {/* Actions */}
-                                                <div className="mt-4 flex justify-end space-x-2">
-                                                    <button
-                                                        onClick={() => handleViewClick(training)}
-                                                        className="p-1 text-gray-400 hover:text-gray-500"
-                                                        title="View Details"
-                                                        type="button"
-                                                    >
-                                                        <Eye className="h-5 w-5" />
-                                                    </button>
-                                                    
-                                                    <button
-                                                        onClick={() => handleEditClick(training)}
-                                                        className="p-1 text-gray-400 hover:text-gray-500"
-                                                        title="Edit"
-                                                        type="button"
-                                                    >
-                                                        <Edit className="h-5 w-5" />
-                                                    </button>
-                                                    
-                                                    <button
-                                                        onClick={() => handleDeleteClick(training)}
-                                                        className="p-1 text-gray-400 hover:text-red-500"
-                                                        title="Delete"
-                                                        type="button"
-                                                    >
-                                                        <Trash2 className="h-5 w-5" />
-                                                    </button>
-                                                    
-                                                    <div className="relative">
-                                                        <select
-                                                            onChange={(e) => handleUpdateStatus(training, e.target.value)}
-                                                            value={training.status}
-                                                            className="text-xs border rounded px-1 py-1"
-                                                            title="Update Status"
-                                                        >
-                                                            <option value="Scheduled">Scheduled</option>
-                                                            <option value="Ongoing">Ongoing</option>
-                                                            <option value="Completed">Completed</option>
-                                                            <option value="Cancelled">Cancelled</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                            training={training}
+                                            onView={handleViewClick}
+                                            onEdit={handleEditClick}
+                                            onDelete={handleDeleteClick}
+                                            onUpdateStatus={handleUpdateStatus}
+                                        />
                                     ))}
                                 </div>
                             )}
@@ -930,7 +1360,7 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                 </div>
             </div>
 
-            {/* Training Modals */}
+            {/* Training Modals - Pass departments to each modal */}
             <TrainingModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
@@ -938,6 +1368,7 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                 training={currentTraining}
                 trainingTypes={trainingTypes}
                 employees={employees}
+                departments={departments} // Pass departments here
                 onChange={setCurrentTraining}
                 onSubmit={handleCreateSubmit}
                 mode="create"
@@ -951,6 +1382,7 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                 training={currentTraining}
                 trainingTypes={trainingTypes}
                 employees={employees}
+                departments={departments} // Pass departments here
                 onChange={setCurrentTraining}
                 onSubmit={handleUpdateSubmit}
                 mode="edit"
@@ -964,6 +1396,7 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                 training={currentTraining}
                 trainingTypes={trainingTypes}
                 employees={employees}
+                departments={departments} // Pass departments here
                 onChange={setCurrentTraining}
                 onSubmit={() => {}}
                 mode="view"

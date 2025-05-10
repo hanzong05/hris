@@ -12,7 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('training_types', function (Blueprint $table) {
-            $table->string('image')->nullable()->after('description');
+            // Add image_url column to store the path to uploaded images
+            $table->string('image_url')->nullable()->after('description');
         });
     }
 
@@ -22,7 +23,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('training_types', function (Blueprint $table) {
-            $table->dropColumn('image');
+            // Remove the column if migration is rolled back
+            $table->dropColumn('image_url');
         });
     }
 };
