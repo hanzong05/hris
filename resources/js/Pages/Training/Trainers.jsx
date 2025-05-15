@@ -62,7 +62,7 @@ const Toast = ({ message, type, onClose }) => {
     );
 };
 
-// Enhanced TrainerModal Component with improved validation feedback
+// Enhanced TrainerModal Component with proper validation
 const TrainerModal = ({ 
     isOpen, 
     onClose, 
@@ -79,6 +79,24 @@ const TrainerModal = ({
     
     // State for file preview
     const [filePreview, setFilePreview] = useState(null);
+    const [activeTab, setActiveTab] = useState('basic'); // For tab navigation
+    const [validationErrors, setValidationErrors] = useState({});
+    const [showErrorPopup, setShowErrorPopup] = useState(false);
+    
+    // Use effect to handle incoming error messages
+    useEffect(() => {
+        if (Object.keys(errorMessages).length > 0) {
+            setValidationErrors(errorMessages);
+            setShowErrorPopup(true);
+            
+            // Auto-hide the popup after 5 seconds
+            const timer = setTimeout(() => {
+                setShowErrorPopup(false);
+            }, 5000);
+            
+            return () => clearTimeout(timer);
+        }
+    }, [errorMessages]);
     
     // Reset file preview when modal opens/closes
     useEffect(() => {
@@ -92,6 +110,9 @@ const TrainerModal = ({
             }
         } else {
             setFilePreview(null);
+            setActiveTab('basic');
+            setValidationErrors({});
+            setShowErrorPopup(false);
         }
     }, [isOpen, trainer.photo_path, filePreview]);
     
@@ -101,7 +122,11 @@ const TrainerModal = ({
         if (file) {
             // Validate file size (2MB)
             if (file.size > 2 * 1024 * 1024) {
-                alert('File size should not exceed 2MB.');
+                setValidationErrors({
+                    ...validationErrors,
+                    photo: 'File size should not exceed 2MB.'
+                });
+                setShowErrorPopup(true);
                 e.target.value = null;
                 return;
             }
@@ -109,7 +134,11 @@ const TrainerModal = ({
             // Validate file type
             const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
             if (!allowedTypes.includes(file.type)) {
-                alert('Only JPG, PNG, and GIF files are allowed.');
+                setValidationErrors({
+                    ...validationErrors,
+                    photo: 'Only JPG, PNG, and GIF files are allowed.'
+                });
+                setShowErrorPopup(true);
                 e.target.value = null;
                 return;
             }
@@ -123,131 +152,601 @@ const TrainerModal = ({
         }
     };
 
-    // Helper function to determine status badge color
-    const getStatusColor = () => {
-        if (trainer.is_active) {
-            return 'bg-green-100 text-green-800 border-green-200';
-        }
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    };
-
-    // Helper function to determine trainer type badge color
-    const getTypeColor = () => {
-        if (trainer.is_external) {
-            return 'bg-purple-100 text-purple-800 border-purple-200';
-        }
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-    };
-
-    // Helper to determine if a field is required
+    // Helper to determine if a field is required based on controller validation rules
     const isFieldRequired = (fieldName) => {
-        if (fieldName === 'name') return true;
-        if (fieldName === 'employee_id' && !trainer.is_external) return true;
-        return false;
+        switch (fieldName) {
+            case 'name':
+                return trainer.is_external; // Only required for external trainers
+            case 'type': // is_external
+                return true;
+            case 'employee_id':
+                return !trainer.is_external; // Required only for internal trainers
+            default:
+                return false;
+        }
+    };
+
+    // Handle form submission with validation
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        
+        // Clear previous errors
+        const newErrors = {};
+        
+        // For external trainers, name is required
+        if (trainer.is_external && (!trainer.name || trainer.name.trim() === '')) {
+            newErrors.name = 'Name is required';
+        }
+        
+        // For internal trainers, employee_id is required
+        if (!trainer.is_external && (!trainer.employee_id || trainer.employee_id === '')) {
+            newErrors.employee_id = 'Employee must be selected for internal trainers';
+        }
+        
+        // Optional field validations (only if provided)
+        if (trainer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trainer.email)) {
+            newErrors.email = 'Please enter a valid email address';
+        }
+        
+        if (trainer.website && !/^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w.-]*)*\/?$/.test(trainer.website)) {
+            newErrors.website = 'Please enter a valid website URL';
+        }
+        
+        if (trainer.phone && !/^[\d\s\+\-\(\)]{7,20}$/.test(trainer.phone)) {
+            newErrors.phone = 'Please enter a valid phone number';
+        }
+        
+        // If we have errors, show them and don't submit
+        if (Object.keys(newErrors).length > 0) {
+            setValidationErrors(newErrors);
+            setShowErrorPopup(true);
+            
+            // Switch to the tab with errors
+            if (newErrors.name || newErrors.employee_id) {
+                setActiveTab('basic');
+            } else if (newErrors.email || newErrors.phone) {
+                setActiveTab('contact');
+            } else if (newErrors.website || newErrors.linkedin) {
+                setActiveTab('online');
+            } else if (newErrors.photo) {
+                setActiveTab('photo');
+            }
+            
+            return;
+        }
+        
+        // If validation passes, submit the form
+        onSubmit(e);
+    };
+
+    // Tabs for layout
+    const tabs = [
+        { id: 'basic', label: 'Basic Info' },
+        { id: 'contact', label: 'Contact' },
+        { id: 'professional', label: 'Professional' },
+        { id: 'online', label: 'Online' },
+        { id: 'photo', label: 'Photo' }
+    ];
+    
+    // Error Popup Component
+    const ErrorPopup = () => {
+        if (!showErrorPopup) return null;
+        
+        return (
+            <div className="fixed top-4 right-4 w-80 bg-red-50 border-l-4 border-red-500 p-4 rounded shadow-lg z-50 animate-fade-in-down">
+                <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                    </div>
+                    <div className="ml-3">
+                        <h3 className="text-sm font-medium text-red-800">
+                            Please fix the following errors:
+                        </h3>
+                        <div className="mt-2 text-sm text-red-700">
+                            <ul className="list-disc pl-5 space-y-1">
+                                {Object.entries(validationErrors).map(([field, error]) => (
+                                    <li key={field}>
+                                        {error}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                    <div className="ml-auto pl-3">
+                        <div className="-mx-1.5 -my-1.5">
+                            <button
+                                onClick={() => setShowErrorPopup(false)}
+                                className="inline-flex bg-red-50 rounded-md p-1.5 text-red-500 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                type="button"
+                            >
+                                <span className="sr-only">Dismiss</span>
+                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     };
     
+    // Create a CSS class for input fields with errors
+    const getInputClass = (fieldName) => {
+        const baseClass = "w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
+        return validationErrors[fieldName]
+            ? `${baseClass} border-red-500 bg-red-50`
+            : `${baseClass} border-gray-300`;
+    };
+    
+    // Add animation for popup
+    const animationStyles = `
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in-down {
+            animation: fadeInDown 0.3s ease-out forwards;
+        }
+    `;
+    
     return (
-        <Modal show={isOpen} onClose={onClose} maxWidth="4xl">
-            <div className="p-0 overflow-hidden">
-                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+        <Modal show={isOpen} onClose={onClose} maxWidth="lg">
+            {/* CSS for animation */}
+            <style>{animationStyles}</style>
+            
+            {/* Error Popup */}
+            <ErrorPopup />
+            
+            <div className="p-0 overflow-hidden max-w-3xl mx-auto">
+                {/* Header */}
+                <div className="bg-indigo-600 p-4 text-white">
                     <div className="flex justify-between items-center">
                         <h2 className="text-xl font-bold">{title}</h2>
                         <button 
                             onClick={() => onClose(false)}
                             className="text-white hover:bg-white/20 rounded-full p-1 transition-colors duration-200"
+                            aria-label="Close"
+                            type="button"
                         >
                             <X className="h-5 w-5" />
                         </button>
                     </div>
                     
                     {/* Status Badges */}
-                    <div className="flex gap-2 mt-3">
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getTypeColor()}`}>
+                    <div className="flex gap-2 mt-2">
+                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${trainer.is_external ? 'bg-purple-500' : 'bg-blue-500'}`}>
                             {trainer.is_external ? 'External' : 'Internal'}
                         </span>
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor()}`}>
+                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${trainer.is_active ? 'bg-green-500' : 'bg-gray-500'}`}>
                             {trainer.is_active ? 'Active' : 'Inactive'}
                         </span>
                     </div>
                 </div>
                 
-                <form onSubmit={onSubmit} className="p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Left Column - Main Info */}
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Tab Navigation */}
+                <div className="flex justify-center border-b border-gray-200">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                                activeTab === tab.id 
+                                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-gray-50' 
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                            }`}
+                            type="button"
+                        >
+                            {tab.label}
+                            {/* Error indicator on tab */}
+                            {Object.keys(validationErrors).some(field => {
+                                if (tab.id === 'basic' && (field === 'name' || field === 'employee_id')) return true;
+                                if (tab.id === 'contact' && (field === 'email' || field === 'phone')) return true;
+                                if (tab.id === 'professional' && (field === 'position' || field === 'company' || field === 'expertise_area' || field === 'qualifications' || field === 'certifications')) return true;
+                                if (tab.id === 'online' && (field === 'website' || field === 'linkedin' || field === 'bio')) return true;
+                                if (tab.id === 'photo' && field === 'photo') return true;
+                                return false;
+                            }) && (
+                                <span className="absolute top-2 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+                
+                <form onSubmit={handleSubmit} className="p-6">
+                    <div className="max-w-lg mx-auto">
+                        {/* Basic Information Tab */}
+                        {activeTab === 'basic' && (
+                            <div className="space-y-4">
+                                {/* Type Selection (always shown) */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Name {isFieldRequired('name') && <span className="text-red-500">*</span>}
+                                        Type {isFieldRequired('type') && <span className="text-red-500">*</span>}
                                     </label>
-                                    <input
-                                        type="text"
-                                        className={`w-full p-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${isViewMode ? 'bg-gray-50' : ''} ${errorMessages.name ? 'border-red-500' : 'border-gray-300'}`}
-                                        value={trainer.name || ''}
-                                        onChange={(e) => onChange({...trainer, name: e.target.value})}
-                                        placeholder="e.g. John Smith"
-                                        required={isFieldRequired('name')}
-                                        disabled={isViewMode}
-                                    />
-                                    {errorMessages.name && <p className="mt-1 text-sm text-red-600">{errorMessages.name}</p>}
-                                </div>
-                                
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
                                     <select
-                                        className={`w-full p-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${isViewMode ? 'bg-gray-50' : ''} border-gray-300`}
+                                        className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent border-gray-300"
                                         value={trainer.is_external ? "true" : "false"}
-                                        onChange={(e) => onChange({...trainer, is_external: e.target.value === "true"})}
+                                        onChange={(e) => {
+                                            const isExternal = e.target.value === "true";
+                                            onChange({
+                                                ...trainer, 
+                                                is_external: isExternal,
+                                                // Clear employee_id when switching to external
+                                                employee_id: isExternal ? '' : trainer.employee_id
+                                            });
+                                        }}
                                         disabled={isViewMode}
                                     >
                                         <option value="false">Internal</option>
                                         <option value="true">External</option>
                                     </select>
                                 </div>
-                            </div>
 
-                            {/* Show employee selection for internal trainers */}
-                            {trainer.is_external === false && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Employee {isFieldRequired('employee_id') && <span className="text-red-500">*</span>}
-                                    </label>
-                                    <select
-                                        className={`w-full p-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${isViewMode ? 'bg-gray-50' : ''} ${errorMessages.employee_id ? 'border-red-500' : 'border-gray-300'}`}
-                                        value={trainer.employee_id || ''}
-                                        onChange={(e) => onChange({...trainer, employee_id: e.target.value})}
-                                        required={isFieldRequired('employee_id')}
-                                        disabled={isViewMode}
-                                    >
-                                        <option value="">Select Employee</option>
-                                        {Array.isArray(employees) && employees.length > 0 ? (
-                                            employees.map(employee => (
-                                                <option key={employee.id} value={employee.id}>
-                                                    {employee.Lname}, {employee.Fname} {employee.idno ? `(${employee.idno})` : ''}
-                                                </option>
-                                            ))
-                                        ) : (
-                                            <option disabled value="">No employees available</option>
+                                {/* Show name field only for external trainers */}
+                                {trainer.is_external && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Name {isFieldRequired('name') && <span className="text-red-500">*</span>}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className={getInputClass('name')}
+                                            value={trainer.name || ''}
+                                            onChange={(e) => onChange({...trainer, name: e.target.value})}
+                                            placeholder="e.g. John Smith"
+                                            required={isFieldRequired('name')}
+                                            disabled={isViewMode}
+                                        />
+                                        {validationErrors.name && (
+                                            <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                </svg>
+                                                {validationErrors.name}
+                                            </p>
                                         )}
-                                    </select>
-                                    {errorMessages.employee_id && <p className="mt-1 text-sm text-red-600">{errorMessages.employee_id}</p>}
-                                </div>
-                            )}
-                            
-                            {/* Other fields remain the same... */}
-                            
-                        </div>
-                        
-                        {/* Right Column - Photo & Status */}
-                        <div>
-                            {/* Photo Upload/Preview Card */}
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-                                <h3 className="font-medium text-gray-900 mb-3">Profile Photo</h3>
+                                    </div>
+                                )}
+
+                                {/* Show employee selection only for internal trainers */}
+                                {!trainer.is_external && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Employee {isFieldRequired('employee_id') && <span className="text-red-500">*</span>}
+                                        </label>
+                                        <select
+                                            className={getInputClass('employee_id')}
+                                            value={trainer.employee_id || ''}
+                                            onChange={(e) => {
+                                                const employeeId = e.target.value;
+                                                // Find the selected employee to auto-populate the name
+                                                const selectedEmployee = employees.find(emp => emp.id.toString() === employeeId);
+                                                let employeeName = '';
+                                                
+                                                if (selectedEmployee) {
+                                                    // Format the name as needed
+                                                    employeeName = `${selectedEmployee.Fname} ${selectedEmployee.Lname}`;
+                                                }
+                                                
+                                                onChange({
+                                                    ...trainer, 
+                                                    employee_id: employeeId,
+                                                    name: employeeName // Auto-populate name
+                                                });
+                                            }}
+                                            required={isFieldRequired('employee_id')}
+                                            disabled={isViewMode}
+                                        >
+                                            <option value="">Select Employee</option>
+                                            {Array.isArray(employees) && employees.length > 0 ? (
+                                                employees.map(employee => (
+                                                    <option key={employee.id} value={employee.id}>
+                                                        {employee.Lname}, {employee.Fname} {employee.idno ? `(${employee.idno})` : ''}
+                                                    </option>
+                                                ))
+                                            ) : (
+                                                <option disabled value="">No employees available</option>
+                                            )}
+                                        </select>
+                                        {validationErrors.employee_id && (
+                                            <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                </svg>
+                                                {validationErrors.employee_id}
+                                            </p>
+                                        )}
+                                        
+                                        {/* Display the auto-populated name for reference, but as read-only */}
+                                        {trainer.name && (
+                                            <div className="mt-2 text-sm text-gray-600">
+                                                Selected: <span className="font-medium">{trainer.name}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                                 
-                                {/* Photo Preview */}
+                                {/* Status Selection */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <div className="relative">
+                                        <select
+                                            className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent border-gray-300"
+                                            value={trainer.is_active ? "true" : "false"}
+                                            onChange={(e) => onChange({...trainer, is_active: e.target.value === "true"})}
+                                            disabled={isViewMode}
+                                        >
+                                            <option value="true">Active</option>
+                                            <option value="false">Inactive</option>
+                                        </select>
+                                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                                            {trainer.is_active ? 
+                                                <div className="h-3 w-3 rounded-full bg-green-500"></div> : 
+                                                <div className="h-3 w-3 rounded-full bg-gray-400"></div>
+                                            }
+                                        </div>
+                                    </div>
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Active trainers can be assigned to training sessions.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Contact Information Tab */}
+                        {activeTab === 'contact' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Mail className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="email"
+                                            className={`pl-10 ${getInputClass('email')}`}
+                                            value={trainer.email || ''}
+                                            onChange={(e) => onChange({...trainer, email: e.target.value})}
+                                            placeholder="email@example.com"
+                                            disabled={isViewMode}
+                                        />
+                                    </div>
+                                    {validationErrors.email && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.email}
+                                        </p>
+                                    )}
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Phone className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            className={`pl-10 ${getInputClass('phone')}`}
+                                            value={trainer.phone || ''}
+                                            onChange={(e) => onChange({...trainer, phone: e.target.value})}
+                                            placeholder="+63 XXX XXX XXXX"
+                                            disabled={isViewMode}
+                                        />
+                                    </div>
+                                    {validationErrors.phone && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.phone}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Professional Information Tab */}
+                        {activeTab === 'professional' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Position/Title</label>
+                                    <input
+                                        type="text"
+                                        className={getInputClass('position')}
+                                        value={trainer.position || ''}
+                                        onChange={(e) => onChange({...trainer, position: e.target.value})}
+                                        placeholder="e.g. Training Specialist"
+                                        disabled={isViewMode}
+                                    />
+                                    {validationErrors.position && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.position}
+                                        </p>
+                                    )}
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Company/Organization</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Briefcase className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            className={`pl-10 ${getInputClass('company')}`}
+                                            value={trainer.company || ''}
+                                            onChange={(e) => onChange({...trainer, company: e.target.value})}
+                                            placeholder="For external trainers"
+                                            disabled={isViewMode || !trainer.is_external}
+                                        />
+                                    </div>
+                                    {validationErrors.company && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.company}
+                                        </p>
+                                    )}
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Area of Expertise</label>
+                                    <input
+                                        type="text"
+                                        className={getInputClass('expertise_area')}
+                                        value={trainer.expertise_area || ''}
+                                        onChange={(e) => onChange({...trainer, expertise_area: e.target.value})}
+                                        placeholder="e.g. Leadership Development, Technical Skills"
+                                        disabled={isViewMode}
+                                    />
+                                    {validationErrors.expertise_area && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.expertise_area}
+                                        </p>
+                                    )}
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Qualifications</label>
+                                    <textarea
+                                        className={getInputClass('qualifications')}
+                                        value={trainer.qualifications || ''}
+                                        onChange={(e) => onChange({...trainer, qualifications: e.target.value})}
+                                        placeholder="Educational background, professional qualifications"
+                                        rows="3"
+                                        disabled={isViewMode}
+                                    ></textarea>
+                                    {validationErrors.qualifications && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.qualifications}
+                                        </p>
+                                    )}
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
+                                    <textarea
+                                        className={getInputClass('certifications')}
+                                        value={trainer.certifications || ''}
+                                        onChange={(e) => onChange({...trainer, certifications: e.target.value})}
+                                        placeholder="List relevant certifications"
+                                        rows="3"
+                                        disabled={isViewMode}
+                                    ></textarea>
+                                    {validationErrors.certifications && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.certifications}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Online Presence Tab */}
+                        {activeTab === 'online' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Globe className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="url"
+                                            className={`pl-10 ${getInputClass('website')}`}
+                                            value={trainer.website || ''}
+                                            onChange={(e) => onChange({...trainer, website: e.target.value})}
+                                            placeholder="https://example.com"
+                                            disabled={isViewMode}
+                                        />
+                                    </div>
+                                    {validationErrors.website && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.website}
+                                        </p>
+                                    )}
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Linkedin className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            className={`pl-10 ${getInputClass('linkedin')}`}
+                                            value={trainer.linkedin || ''}
+                                            onChange={(e) => onChange({...trainer, linkedin: e.target.value})}
+                                            placeholder="LinkedIn profile URL or username"
+                                            disabled={isViewMode}
+                                        />
+                                    </div>
+                                    {validationErrors.linkedin && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.linkedin}
+                                        </p>
+                                    )}
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Bio/Description</label>
+                                    <textarea
+                                        className={getInputClass('bio')}
+                                        value={trainer.bio || ''}
+                                        onChange={(e) => onChange({...trainer, bio: e.target.value})}
+                                        placeholder="Professional summary and experience"
+                                        rows="4"
+                                        disabled={isViewMode}
+                                    ></textarea>
+                                    {validationErrors.bio && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                            <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            {validationErrors.bio}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Photo Tab */}
+                        {activeTab === 'photo' && (
+                            <div className="space-y-4">
                                 {filePreview ? (
                                     <div className="mb-4">
-                                        <div className="relative w-full h-64 rounded-lg overflow-hidden bg-gray-100">
+                                        <div className="relative w-full h-64 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
                                             <img
                                                 src={filePreview}
                                                 alt="Trainer Photo Preview"
@@ -256,13 +755,14 @@ const TrainerModal = ({
                                             {!isViewMode && (
                                                 <button
                                                     type="button"
-                                                    className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md"
+                                                    className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
                                                     onClick={() => {
                                                         setFilePreview(null);
-                                                        if (trainer.photo_path) {
-                                                            onChange({...trainer, photo_path: null});
-                                                        }
+                                                        onChange({...trainer, photo_path: null});
+                                                        const fileInput = document.querySelector('input[type="file"]');
+                                                        if (fileInput) fileInput.value = '';
                                                     }}
+                                                    aria-label="Remove image"
                                                 >
                                                     <X className="h-4 w-4 text-gray-500" />
                                                 </button>
@@ -271,67 +771,80 @@ const TrainerModal = ({
                                     </div>
                                 ) : (
                                     <>
-                                    {!isViewMode && (
-                                        <label className="w-full flex flex-col items-center px-4 py-6 bg-white rounded-lg border-2 border-gray-300 border-dashed cursor-pointer hover:bg-gray-50">
-                                            <div className="flex flex-col items-center justify-center">
-                                                <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                                                <p className="mb-2 text-sm text-gray-500">
-                                                    <span className="font-semibold">Click to upload</span> or drag and drop
-                                                </p>
-                                                <p className="text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
+                                        {!isViewMode ? (
+                                            <label className="block w-full cursor-pointer">
+                                                <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center hover:bg-gray-50 transition-colors">
+                                                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-50 mb-3">
+                                                        <Upload className="h-6 w-6 text-indigo-500" />
+                                                    </div>
+                                                    <div className="text-sm text-gray-600">
+                                                        <span className="font-medium text-indigo-600 hover:text-indigo-500">
+                                                            Click to upload
+                                                        </span> or drag and drop
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        PNG, JPG, GIF up to 2MB
+                                                    </p>
+                                                </div>
+                                                <input 
+                                                    type="file" 
+                                                    className="hidden"
+                                                    onChange={handleFileChange}
+                                                    accept="image/jpeg,image/png,image/gif"
+                                                    disabled={isViewMode}
+                                                />
+                                            </label>
+                                        ) : (
+                                            <div className="w-full px-4 py-8 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                                                <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-gray-100 mb-3">
+                                                    <User className="h-8 w-8 text-gray-400" />
+                                                </div>
+                                                <p className="text-sm text-gray-500">No photo available</p>
                                             </div>
-                                            <input 
-                                                type="file" 
-                                                className="hidden"
-                                                onChange={handleFileChange}
-                                                accept="image/jpeg,image/png,image/gif"
-                                                disabled={isViewMode}
-                                            />
-                                        </label>
-                                    )}
+                                        )}
                                     </>
                                 )}
-                                {errorMessages.photo && <p className="mt-1 text-sm text-red-600">{errorMessages.photo}</p>}
-                            </div>
-                            
-                            {/* Status Panel */}
-                            {!isViewMode && (
-                                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                                    <h3 className="font-medium text-gray-900 mb-3">Status</h3>
-                                    <select
-                                        className="w-full p-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent border-gray-300"
-                                        value={trainer.is_active ? "true" : "false"}
-                                        onChange={(e) => onChange({...trainer, is_active: e.target.value === "true"})}
-                                        disabled={isViewMode}
-                                    >
-                                        <option value="true">Active</option>
-                                        <option value="false">Inactive</option>
-                                    </select>
+                                {validationErrors.photo && (
+                                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                                        <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        {validationErrors.photo}
+                                    </p>
+                                )}
+                                
+                                <div className="mt-4 bg-blue-50 border border-blue-100 rounded-lg p-4">
+                                    <h4 className="text-sm font-medium text-blue-800 mb-2">Image Guidelines:</h4>
+                                    <ul className="text-xs text-blue-700 space-y-1 pl-4 list-disc">
+                                        <li>Professional headshot recommended</li>
+                                        <li>Clear, well-lit, high-quality image</li>
+                                        <li>Neutral background preferred</li>
+                                        <li>Maximum file size: 2MB</li>
+                                    </ul>
                                 </div>
+                            </div>
+                        )}
+                        
+                        {/* Form Action Buttons */}
+                        <div className="flex justify-end mt-6 pt-4 border-t border-gray-200">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => onClose(false)}
+                                className="mr-3"
+                            >
+                                Cancel
+                            </Button>
+                            
+                            {!isViewMode && (
+                                <Button
+                                    type="submit"
+                                    className="bg-indigo-600 text-white hover:bg-indigo-700"
+                                >
+                                    {mode === 'create' ? 'Create Trainer' : 'Update Trainer'}
+                                </Button>
                             )}
                         </div>
-                    </div>
-                    
-                    {/* Form Action Buttons */}
-                    <div className="flex justify-end mt-6 pt-4 border-t border-gray-200">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onClose(false)}
-                            className="mr-3"
-                        >
-                            {isViewMode ? 'Close' : 'Cancel'}
-                        </Button>
-                        
-                        {!isViewMode && (
-                            <Button
-                                type="submit"
-                                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 transition-all duration-200"
-                            >
-                                <Save className="w-4 h-4 mr-2" />
-                                {mode === 'create' ? 'Create Trainer' : 'Update Trainer'}
-                            </Button>
-                        )}
                     </div>
                 </form>
             </div>
