@@ -850,140 +850,164 @@ const Trainers = ({ auth, trainers: initialTrainers, counts, currentType }) => {
                             </div>
                         </div>
 
-                        {/* Trainers Cards */}
-                        <div className="mb-8">
-                            {/* Loading State */}
-                            {loading && (
-                                <div className="py-16 text-center text-gray-500">
-                                    Loading...
-                                </div>
-                            )}
+                      {/* Replace the Trainers Cards section with this List View */}
+<div className="mb-8">
+    {/* Loading State */}
+    {loading && (
+        <div className="py-16 text-center text-gray-500">
+            Loading...
+        </div>
+    )}
 
-                            {/* No Results */}
-                            {!loading && filteredTrainers.length === 0 && (
-                                <div className="py-16 text-center text-gray-500">
-                                    {searchTerm || typeFilter !== 'all'
-                                        ? 'No trainers found matching your filters.'
-                                        : 'No trainers found. Create a new trainer to get started.'}
-                                </div>
-                            )}
+    {/* No Results */}
+    {!loading && filteredTrainers.length === 0 && (
+        <div className="py-16 text-center text-gray-500">
+            {searchTerm || typeFilter !== 'all'
+                ? 'No trainers found matching your filters.'
+                : 'No trainers found. Create a new trainer to get started.'}
+        </div>
+    )}
 
-                            {/* Trainers Grid */}
-                            {!loading && filteredTrainers.length > 0 && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {filteredTrainers.map(trainer => (
-                                        <div 
-                                            key={trainer.id}
-                                            className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200"
-                                        >
-                                            {/* Trainer Image */}
-                                            <div className="h-48 bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center">
-                                                {trainer.photo_path ? (
-                                                    <img 
-                                                        src={`/storage/${trainer.photo_path}`}
-                                                        alt={trainer.name}
-                                                        className="h-full w-full object-cover"
-                                                    />
-                                                ) : (
-                                                    <User className="h-20 w-20 text-white opacity-75" />
-                                                )}
-                                            </div>
-                                            
-                                            {/* Trainer Details */}
-                                            <div className="p-5">
-                                                <div className="flex justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-gray-900">
-                                                        {trainer.name}
-                                                    </h3>
-                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${trainer.is_external ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
-                                                        {trainer.is_external ? 'External' : 'Internal'}
-                                                    </span>
+    {/* Trainers List */}
+    {!loading && filteredTrainers.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trainer</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expertise</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredTrainers.map(trainer => (
+                            <tr key={trainer.id} className="hover:bg-gray-50">
+                                {/* Trainer Info */}
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                        <div className="flex-shrink-0 h-10 w-10">
+                                            {trainer.photo_path ? (
+                                                <img 
+                                                    src={`/storage/${trainer.photo_path}`}
+                                                    alt={trainer.name}
+                                                    className="h-10 w-10 rounded-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center">
+                                                    <User className="h-5 w-5 text-white" />
                                                 </div>
-                                                
-                                                <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                    <Briefcase className="h-4 w-4 mr-1" />
-                                                    <span>{trainer.position || 'No position'}{trainer.company ? ` at ${trainer.company}` : ''}</span>
-                                                </div>
-                                                
-                                                {trainer.email && (
-                                                    <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                        <Mail className="h-4 w-4 mr-1" />
-                                                        <span>{trainer.email}</span>
-                                                    </div>
-                                                )}
-                                                
-                                                {trainer.phone && (
-                                                    <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                        <Phone className="h-4 w-4 mr-1" />
-                                                        <span>{trainer.phone}</span>
-                                                    </div>
-                                                )}
-                                                
-                                                {trainer.expertise_area && (
-                                                    <div className="flex items-center text-sm text-gray-600 mb-4">
-                                                        <BookOpen className="h-4 w-4 mr-1" />
-                                                        <span>{trainer.expertise_area}</span>
-                                                    </div>
-                                                )}
-                                                
-                                                {/* Status Indicator */}
-                                                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                                                    <div className={`flex items-center text-sm ${trainer.is_active ? 'text-green-600' : 'text-gray-500'}`}>
-                                                        <div className={`w-2 h-2 rounded-full mr-2 ${trainer.is_active ? 'bg-green-600' : 'bg-gray-500'}`}></div>
-                                                        {trainer.is_active ? 'Active' : 'Inactive'}
-                                                    </div>
-                                                    
-                                                    {/* Actions */}
-                                                    <div className="flex space-x-2">
-                                                        <button
-                                                            onClick={() => handleViewClick(trainer)}
-                                                            className="p-1 text-gray-400 hover:text-gray-500"
-                                                            title="View Details"
-                                                            type="button"
-                                                        >
-                                                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                            </svg>
-                                                        </button>
-                                                        
-                                                        <button
-                                                            onClick={() => handleEditClick(trainer)}
-                                                            className="p-1 text-gray-400 hover:text-gray-500"
-                                                            title="Edit"
-                                                            type="button"
-                                                        >
-                                                            <Edit className="h-5 w-5" />
-                                                        </button>
-                                                        
-                                                        <button
-                                                            onClick={() => handleDeleteClick(trainer)}
-                                                            className="p-1 text-gray-400 hover:text-red-500"
-                                                            title="Delete"
-                                                            type="button"
-                                                        >
-                                                            <Trash2 className="h-5 w-5" />
-                                                        </button>
-                                                        
-                                                        <button
-                                                            onClick={() => handleToggleActive(trainer)}
-                                                            className={`p-1 ${trainer.is_active ? 'text-green-400 hover:text-green-500' : 'text-gray-400 hover:text-gray-500'}`}
-                                                            title={trainer.is_active ? 'Deactivate' : 'Activate'}
-                                                            type="button"
-                                                        >
-                                                            {trainer.is_active ? 
-                                                                <ToggleRight className="h-5 w-5" /> : 
-                                                                <ToggleLeft className="h-5 w-5" />
-                                                            }
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                        <div className="ml-4">
+                                            <div className="text-sm font-medium text-gray-900">{trainer.name}</div>
+                                            <div className="text-sm text-gray-500">{trainer.position || 'No position'}</div>
+                                            {trainer.company && <div className="text-xs text-gray-500">{trainer.company}</div>}
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                {/* Contact Info */}
+                                <td className="px-6 py-4">
+                                    {trainer.email && (
+                                        <div className="flex items-center text-sm text-gray-600 mb-1">
+                                            <Mail className="h-4 w-4 mr-1 flex-shrink-0" />
+                                            <span className="truncate max-w-xs">{trainer.email}</span>
+                                        </div>
+                                    )}
+                                    {trainer.phone && (
+                                        <div className="flex items-center text-sm text-gray-600">
+                                            <Phone className="h-4 w-4 mr-1 flex-shrink-0" />
+                                            <span>{trainer.phone}</span>
+                                        </div>
+                                    )}
+                                </td>
+                                
+                                {/* Expertise */}
+                                <td className="px-6 py-4">
+                                    <div className="text-sm text-gray-900">
+                                        {trainer.expertise_area || 'Not specified'}
+                                    </div>
+                                    {trainer.qualifications && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            <Award className="h-3 w-3 inline mr-1" />
+                                            {trainer.qualifications}
+                                        </div>
+                                    )}
+                                </td>
+                                
+                                {/* Type */}
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${trainer.is_external ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                                        {trainer.is_external ? 'External' : 'Internal'}
+                                    </span>
+                                </td>
+                                
+                                {/* Status */}
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className={`flex items-center text-sm ${trainer.is_active ? 'text-green-600' : 'text-gray-500'}`}>
+                                        <div className={`w-2 h-2 rounded-full mr-2 ${trainer.is_active ? 'bg-green-600' : 'bg-gray-500'}`}></div>
+                                        {trainer.is_active ? 'Active' : 'Inactive'}
+                                    </div>
+                                </td>
+                                
+                                {/* Actions */}
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <div className="flex justify-end space-x-2">
+                                        <button
+                                            onClick={() => handleViewClick(trainer)}
+                                            className="p-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                                            title="View Details"
+                                            type="button"
+                                        >
+                                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                        </button>
+                                        
+                                        <button
+                                            onClick={() => handleEditClick(trainer)}
+                                            className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                            title="Edit"
+                                            type="button"
+                                        >
+                                            <Edit className="h-5 w-5" />
+                                        </button>
+                                        
+                                        <button
+                                            onClick={() => handleDeleteClick(trainer)}
+                                            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                            title="Delete"
+                                            type="button"
+                                        >
+                                            <Trash2 className="h-5 w-5" />
+                                        </button>
+                                        
+                                        <button
+                                            onClick={() => handleToggleActive(trainer)}
+                                            className={`p-1 ${trainer.is_active ? 'text-green-400 hover:text-green-500' : 'text-gray-400 hover:text-gray-500'} transition-colors`}
+                                            title={trainer.is_active ? 'Deactivate' : 'Activate'}
+                                            type="button"
+                                        >
+                                            {trainer.is_active ? 
+                                                <ToggleRight className="h-5 w-5" /> : 
+                                                <ToggleLeft className="h-5 w-5" />
+                                            }
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )}
+</div>
                     </div>
                 </div>
             </div>

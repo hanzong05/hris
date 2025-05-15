@@ -21,63 +21,48 @@ class TrainingController extends Controller
     /**
      * Display a listing of trainings.
      */
-    public function index(Request $request)
-    {
-        $status = $request->input('status', 'all');
-        
-        // Get counts for stats
-        $counts = [
-            'total' => Training::count(),
-            'scheduled' => Training::where('status', 'Scheduled')->count(),
-            'ongoing' => Training::where('status', 'Ongoing')->count(),
-            'completed' => Training::where('status', 'Completed')->count(),
-            'cancelled' => Training::where('status', 'Cancelled')->count(),
-        ];
-        
-        // Get training types for filter dropdown
-        $trainingTypes = TrainingType::orderBy('name')->get();
-        
-        // Get trainings with relationships
-        $trainingQuery = Training::with(['type', 'participants.employee', 'trainer']);
-        
-        // Apply status filter if specified
-        if ($status !== 'all') {
-            $trainingQuery->where('status', $status);
-        }
-        
-        // Get all employees for participant selection
-        $employees = Employee::select('id', 'Fname', 'Lname', 'idno', 'Department')
-            ->orderBy('Lname')
-            ->get();
-        
-        // Debug: Check trainers count
-        $activeTrainersCount = Trainer::active()->count();
-        $totalTrainersCount = Trainer::count();
-        
-        \Log::info('Active trainers count: ' . $activeTrainersCount);
-        \Log::info('Total trainers count: ' . $totalTrainersCount);
-        
-        // Get ALL trainers (not just active) for debugging
-        $trainers = Trainer::orderBy('name')->get();
-        
-        // Alternative: If you want to use active trainers but fall back to all if none are active
-        // $trainers = Trainer::active()->orderBy('name')->get();
-        // if ($trainers->isEmpty()) {
-        //     $trainers = Trainer::orderBy('name')->get();
-        // }
-        
-        \Log::info('Trainers being passed to frontend: ' . $trainers->count());
-        
-        return Inertia::render('Training/Trainings', [
-            'trainings' => $trainingQuery->orderBy('start_date', 'desc')->get(),
-            'counts' => $counts,
-            'trainingTypes' => $trainingTypes,
-            'employees' => $employees,
-            'trainers' => $trainers,
-            'currentStatus' => $status,
-            'auth' => ['user' => Auth::user()]
-        ]);
+   public function index(Request $request)
+{
+    $status = $request->input('status', 'all');
+    
+    // Get counts for stats
+    $counts = [
+        'total' => Training::count(),
+        'scheduled' => Training::where('status', 'Scheduled')->count(),
+        'ongoing' => Training::where('status', 'Ongoing')->count(),
+        'completed' => Training::where('status', 'Completed')->count(),
+        'cancelled' => Training::where('status', 'Cancelled')->count(),
+    ];
+    
+    // Get training types for filter dropdown
+    $trainingTypes = TrainingType::orderBy('name')->get();
+    
+    // Get trainings with relationships
+    $trainingQuery = Training::with(['type', 'participants.employee', 'trainer']);
+    
+    // Apply status filter if specified
+    if ($status !== 'all') {
+        $trainingQuery->where('status', $status);
     }
+    
+    // Get all employees for participant selection
+    $employees = Employee::select('id', 'Fname', 'Lname', 'idno', 'Department')
+        ->orderBy('Lname')
+        ->get();
+    
+    // Get trainers (both active and inactive)
+    $trainers = Trainer::orderBy('name')->get();
+    
+    return Inertia::render('Training/Trainings', [
+        'trainings' => $trainingQuery->orderBy('start_date', 'desc')->get(),
+        'counts' => $counts,
+        'trainingTypes' => $trainingTypes,
+        'employees' => $employees,
+        'trainers' => $trainers,
+        'currentStatus' => $status,
+        'auth' => ['user' => Auth::user()]
+    ]);
+}
     /**
      * Get trainings list for API.
      */

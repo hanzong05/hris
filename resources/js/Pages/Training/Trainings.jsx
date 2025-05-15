@@ -199,7 +199,7 @@ const TrainingCard = ({ training, onView, onEdit, onDelete, onUpdateStatus }) =>
                 {/* Trainer & Duration */}
                 <div className="flex items-center text-sm text-gray-600 mb-2">
                     <User className="h-4 w-4 mr-1" />
-                    <span className="font-medium">{training.trainer || 'No trainer'}</span>
+                    <span className="font-medium">{training.trainer?.name || 'No trainer'}</span>
                     <span className="mx-1">•</span>
                     <Clock className="h-4 w-4 mr-1" />
                     <span>{calculateDuration()}</span>
@@ -227,7 +227,7 @@ const TrainingCard = ({ training, onView, onEdit, onDelete, onUpdateStatus }) =>
                 {/* Participants count */}
                 <div className="mt-2 text-sm text-gray-600">
                     <Users className="h-4 w-4 inline mr-1" />
-                    <span>{training.participants_count || 0}/{training.max_participants || '∞'} participants</span>
+                    <span>{training.participants?.length || 0}/{training.max_participants || '∞'} participants</span>
                 </div>
                 
                 {/* Actions */}
@@ -277,7 +277,8 @@ const TrainingCard = ({ training, onView, onEdit, onDelete, onUpdateStatus }) =>
         </div>
     );
 };
-// Updated Training Modal Component with Trainer Dropdown
+
+
 const TrainingModal = ({ 
     isOpen, 
     onClose, 
@@ -286,7 +287,7 @@ const TrainingModal = ({
     trainingTypes,
     employees,
     departments,
-    trainers, // Add this prop
+    trainers,
     onChange, 
     onSubmit,
     mode = 'create',
@@ -297,18 +298,19 @@ const TrainingModal = ({
     // State for employee search
     const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
     
-    // Get filtered employees based on selected department and search term
+    // Get filtered employees based on selected departments and search term
     const getFilteredEmployees = useCallback(() => {
         if (!Array.isArray(employees)) {
             return [];
         }
         
-        // Start with employees filtered by department if one is selected
+        // Start with all employees
         let filteredEmployees = employees;
         
-        if (training.department) {
+        // Filter by selected departments if any are selected
+        if (training.departments && training.departments.length > 0) {
             filteredEmployees = employees.filter(emp => 
-                emp.Department === training.department
+                training.departments.includes(emp.Department)
             );
         }
         
@@ -334,7 +336,7 @@ const TrainingModal = ({
         }
         
         return filteredEmployees;
-    }, [employees, training.department, employeeSearchTerm]);
+    }, [employees, training.departments, employeeSearchTerm]);
     
     // Get filtered employees for selection
     const filteredEmployees = getFilteredEmployees();
@@ -369,11 +371,17 @@ const TrainingModal = ({
     };
     
     // Reset search term when modal opens
-    useEffect(() => {
+   useEffect(() => {
         if (isOpen) {
-            setEmployeeSearchTerm('');
+            console.log('TrainingModal props:', {
+                mode,
+                training: { ...training },
+                departmentsCount: Array.isArray(departments) ? departments.length : 'not an array',
+                trainersCount: Array.isArray(trainers) ? trainers.length : 'not an array',
+                firstTrainer: Array.isArray(trainers) && trainers.length > 0 ? trainers[0] : null
+            });
         }
-    }, [isOpen]);
+    }, [isOpen, mode, training, departments, trainers]);
     
     // Helper function to extract participant name
     const getParticipantName = (participant) => {
@@ -386,9 +394,9 @@ const TrainingModal = ({
         return 'Unknown Participant';
     };
     
-    // Display count of employees from current department
-    const departmentEmployeeCount = training.department 
-        ? employees.filter(e => e.Department === training.department).length 
+    // Display count of employees from selected departments
+    const departmentEmployeeCount = training.departments && training.departments.length > 0
+        ? employees.filter(e => training.departments.includes(e.Department)).length 
         : employees.length;
     
     // Check if we have selected participants
@@ -421,8 +429,12 @@ const TrainingModal = ({
                         </div>
                         
                         <div>
-                            <h3 className="font-medium text-gray-900">Department</h3>
-                            <p className="text-gray-600">{training.department || 'N/A'}</p>
+                            <h3 className="font-medium text-gray-900">Department(s)</h3>
+                            <p className="text-gray-600">
+                                {training.departments && training.departments.length > 0 
+                                    ? training.departments.join(', ') 
+                                    : 'N/A'}
+                            </p>
                         </div>
                         
                         <div>
@@ -512,21 +524,66 @@ const TrainingModal = ({
                                     {errorMessages.title && <p className="mt-1 text-xs text-red-600">{errorMessages.title}</p>}
                                 </div>
 
-                                {/* Department */}
+                                {/* Department(s) - MULTI-SELECT */}
                                 <div className="mb-3">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
-                                    <select
-                                        className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.department ? 'border-red-500' : 'border-gray-300'}`}
-                                        value={training.department || ''}
-                                        onChange={(e) => onChange({...training, department: e.target.value})}
-                                        required
-                                    >
-                                        <option value="">Select Department</option>
-                                        {Array.isArray(departments) && departments.map(dept => (
-                                            <option key={dept.id} value={dept.name}>{dept.name}</option>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Department(s) *</label>
+                                    <div className="relative">
+                                        <select
+                                            className={`w-full p-2 border rounded focus:ring-1 focus:ring-blue-500 ${errorMessages.departments ? 'border-red-500' : 'border-gray-300'}`}
+                                            value=""
+                                            onChange={(e) => {
+                                                if (e.target.value) {
+                                                    // Create a new array with all current departments plus the new one
+                                                    const newDepartments = [...(training.departments || [])];
+                                                    // Only add if not already in the array
+                                                    if (!newDepartments.includes(e.target.value)) {
+                                                        newDepartments.push(e.target.value);
+                                                        onChange({...training, departments: newDepartments});
+                                                    }
+                                                    // Reset the select value
+                                                    e.target.value = "";
+                                                }
+                                            }}
+                                            required={!training.departments || training.departments.length === 0}
+                                        >
+                                            <option value="">Select Department(s)</option>
+                                            {Array.isArray(departments) && departments.map(dept => {
+                                                // Only show departments not already selected
+                                                if (!training.departments || !training.departments.includes(dept.name)) {
+                                                    return (
+                                                        <option key={dept.id} value={dept.name}>{dept.name}</option>
+                                                    );
+                                                }
+                                                return null;
+                                            })}
+                                        </select>
+                                    </div>
+                                    
+                                    {/* Display selected departments as tags */}
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {training.departments && training.departments.map((dept, index) => (
+                                            <div key={index} className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded flex items-center">
+                                                {dept}
+                                                <button
+                                                    type="button"
+                                                    className="ml-1.5 text-blue-600 hover:text-blue-800 focus:outline-none"
+                                                    onClick={() => {
+                                                        const newDepartments = [...training.departments];
+                                                        newDepartments.splice(index, 1);
+                                                        onChange({...training, departments: newDepartments});
+                                                    }}
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
                                         ))}
-                                    </select>
-                                    {errorMessages.department && <p className="mt-1 text-xs text-red-600">{errorMessages.department}</p>}
+                                    </div>
+                                    
+                                    {(!training.departments || training.departments.length === 0) && (
+                                        <p className="mt-1 text-xs text-gray-500">No departments selected</p>
+                                    )}
+                                    
+                                    {errorMessages.departments && <p className="mt-1 text-xs text-red-600">{errorMessages.departments}</p>}
                                 </div>
 
                                 {/* Start Date */}
@@ -627,15 +684,21 @@ const TrainingModal = ({
                                         onChange={(e) => onChange({...training, trainer_id: e.target.value})}
                                     >
                                         <option value="">Select Trainer</option>
-                                        {trainers && trainers.map(trainer => (
-                                            <option key={trainer.id} value={trainer.id}>
-                                                {trainer.name}
-                                                {trainer.is_external ? ' (External)' : ' (Internal)'}
-                                                {trainer.company ? ` - ${trainer.company}` : ''}
-                                            </option>
-                                        ))}
+                                        {Array.isArray(trainers) && trainers.length > 0 ? (
+                                            trainers.map(trainer => (
+                                                <option key={trainer.id} value={trainer.id}>
+                                                    {trainer.name}
+                                                    {trainer.is_external ? ' (External)' : ' (Internal)'}
+                                                    {trainer.company ? ` - ${trainer.company}` : ''}
+                                                </option>
+                                            ))
+                                        ) : (
+                                            <option value="">No trainers available</option>
+                                        )}
                                     </select>
-                                    {errorMessages.trainer_id && <p className="mt-1 text-xs text-red-600">{errorMessages.trainer_id}</p>}
+                                    {errorMessages.trainer_id && (
+                                        <p className="mt-1 text-xs text-red-600">{errorMessages.trainer_id}</p>
+                                    )}
                                 </div>
 
                                 {/* Materials Link */}
@@ -672,7 +735,9 @@ const TrainingModal = ({
                                 <label className="block text-sm font-medium text-gray-700">Participants</label>
                                 <div className="text-xs text-gray-500">
                                     {departmentEmployeeCount} employee{departmentEmployeeCount !== 1 ? 's' : ''} 
-                                    {training.department ? ` from ${training.department}` : ''}
+                                    {training.departments && training.departments.length > 0 
+                                        ? ` from selected departments` 
+                                        : ''}
                                 </div>
                             </div>
                             
@@ -720,7 +785,9 @@ const TrainingModal = ({
                                         {displayEmployees()
                                             .map(employee => {
                                                 const isSelected = training.participants?.includes(employee.id);
-                                                const isFromCurrentDepartment = !training.department || employee.Department === training.department;
+                                                const isFromSelectedDepartments = !training.departments || 
+                                                    training.departments.length === 0 || 
+                                                    training.departments.includes(employee.Department);
                                                 const matchesSearch = !employeeSearchTerm || filteredEmployees.includes(employee);
                                                 
                                                 return (
@@ -755,7 +822,7 @@ const TrainingModal = ({
                                                                 </label>
                                                                 <p className="text-xs text-gray-500">
                                                                     {employee.Department || 'No Department'}
-                                                                    {isSelected && (!isFromCurrentDepartment || !matchesSearch) && (
+                                                                    {isSelected && (!isFromSelectedDepartments || !matchesSearch) && (
                                                                         <span className="ml-2 text-indigo-600">(Selected)</span>
                                                                     )}
                                                                 </p>
@@ -768,8 +835,8 @@ const TrainingModal = ({
                                     </div>
                                 ) : (
                                     <div className="p-4 text-center text-sm text-gray-500">
-                                        {training.department && !employeeSearchTerm
-                                            ? `No employees found in ${training.department}`
+                                        {training.departments && training.departments.length > 0 && !employeeSearchTerm
+                                            ? `No employees found in selected departments`
                                             : employeeSearchTerm
                                                 ? "No employees match your search"
                                                 : "No employees available"}
@@ -807,11 +874,10 @@ const TrainingModal = ({
         </Modal>
     );
 };
-// Main Training Component with Department Dropdown
-const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, employees, currentStatus }) => {
+const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, employees, trainers, currentStatus }) => {
     // Safely get user from page props
     const user = auth?.user || {};
-    
+        console.log('Trainers received in component:', trainers || 'No trainers provided');
     const [trainings, setTrainings] = useState(initialTrainings || []);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -825,21 +891,22 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
     // Toast state
     const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     
-    // Training state
-    const emptyTraining = {
-        title: '',
-        description: '',
-        training_type_id: '',
-        department: '',
-        start_date: '',
-        end_date: '',
-        location: '',
-        trainer: '',
-        max_participants: '',
-        materials_link: '',
-        status: 'Scheduled',
-        participants: []
-    };
+   // Empty training template with correct structure
+const emptyTraining = {
+    title: '',
+    description: '',
+    training_type_id: '',
+    departments: [],
+    start_date: '',
+    end_date: '',
+    location: '',
+    trainer_id: '',  // Changed from trainer to trainer_id to match backend expectation
+    max_participants: '',
+    materials_link: '',
+    status: 'Scheduled',
+    participants: []
+};
+
     const [currentTraining, setCurrentTraining] = useState(emptyTraining);
     
     // Error state
@@ -947,166 +1014,216 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
 
     // Handle editing training (WITH DEPARTMENT HANDLING)
     const handleEditClick = async (training) => {
-        try {
-            // Fetch full training details including participants
-            const response = await axios.get(`/trainings/${training.id}`);
-            const fullTraining = response.data;
-            
-            setCurrentTraining({
-                ...fullTraining,
-                participants: fullTraining.participants?.map(p => p.employee_id) || []
-            });
-            setErrors({});
-            setIsEditModalOpen(true);
-            
-            // Make sure departments are loaded
-            if (departments.length === 0 && !loadingDepartments) {
-                loadDepartments();
-            }
-        } catch (error) {
-            console.error('Error fetching training details:', error);
-            // Fallback to original data
-            setCurrentTraining({
-                ...training,
-                participants: training.participants?.map(p => p.employee_id) || []
-            });
-            setErrors({});
-            setIsEditModalOpen(true);
-        }
-    };
-
-    // Handle viewing training (WITH DEPARTMENT HANDLING)
-    const handleViewClick = async (training) => {
-        try {
-            // Fetch full training details including participants with employee data
-            const response = await axios.get(`/trainings/${training.id}`);
-            console.log('Full training data:', response.data);
-            setCurrentTraining(response.data);
-            setIsViewModalOpen(true);
-            
-            // Make sure departments are loaded
-            if (departments.length === 0 && !loadingDepartments) {
-                loadDepartments();
-            }
-        } catch (error) {
-            console.error('Error fetching training details:', error);
-            // Fallback to existing data
-            setCurrentTraining(training);
-            setIsViewModalOpen(true);
-        }
-    };
-    
-    // Handle creating new training (WITH DEPARTMENT HANDLING)
-    const handleCreateSubmit = async (e) => {
-        e.preventDefault();
-        setErrors({});
+    try {
+        // Fetch full training details including participants
+        const response = await axios.get(`/trainings/${training.id}`);
+        const fullTraining = response.data;
         
-        try {
-            // Prepare training data with careful handling of empty values
-            const trainingData = {
-                title: currentTraining.title || '',
-                training_type_id: currentTraining.training_type_id ? parseInt(currentTraining.training_type_id) : null,
-                department: currentTraining.department || '',  // Department from dropdown
-                status: currentTraining.status || 'Scheduled',
-                start_date: currentTraining.start_date ? moment(currentTraining.start_date).format('YYYY-MM-DD HH:mm:ss') : null,
-                end_date: currentTraining.end_date ? moment(currentTraining.end_date).format('YYYY-MM-DD HH:mm:ss') : null,
-            };
-            
-            // Only add optional fields if they have values
-            if (currentTraining.description) {
-                trainingData.description = currentTraining.description;
-            }
-            if (currentTraining.location) {
-                trainingData.location = currentTraining.location;
-            }
-            if (currentTraining.trainer) {
-                trainingData.trainer = currentTraining.trainer;
-            }
-            if (currentTraining.max_participants) {
-                trainingData.max_participants = parseInt(currentTraining.max_participants);
-            }
-            if (currentTraining.materials_link) {
-                trainingData.materials_link = currentTraining.materials_link;
-            }
-            
-            // Handle participants separately
-            if (currentTraining.participants && currentTraining.participants.length > 0) {
-                trainingData.participants = currentTraining.participants;
-            }
-            
-            console.log('Sending training data:', trainingData);
-            
-            // Try to create training
-            const response = await axios.post('/trainings', trainingData);
-            
-            // Update trainings list
-            await loadData();
-            
-            // Reset form and close modal
-            setCurrentTraining(emptyTraining);
-            setIsCreateModalOpen(false);
-            
-            showToast('Training created successfully');
-        } catch (error) {
-            console.error('Error creating training:', error);
-            
-            if (error.response?.status === 422 && error.response?.data?.errors) {
-                setErrors(error.response.data.errors);
-                const errorMessages = Object.values(error.response.data.errors).flat().join(', ');
-                showToast(`Validation error: ${errorMessages}`, 'error');
-            } else {
-                showToast(error.response?.data?.message || 'Error creating training', 'error');
-            }
+        // Convert department string to array for multi-select form handling
+        const departmentsArray = fullTraining.department 
+            ? fullTraining.department.split(',').map(d => d.trim()) 
+            : [];
+        
+        // Set currentTraining only once with all needed properties
+        setCurrentTraining({
+            ...fullTraining,
+            departments: departmentsArray, // Add departments array for the form
+            participants: fullTraining.participants?.map(p => p.employee_id) || []
+        });
+        
+        setErrors({});
+        setIsEditModalOpen(true);
+        
+        // Make sure departments are loaded
+        if (departments.length === 0 && !loadingDepartments) {
+            loadDepartments();
         }
-    };
-
+    } catch (error) {
+        console.error('Error fetching training details:', error);
+        
+        // Fallback to original data - also need to add departments here
+        const departmentsArray = training.department 
+            ? training.department.split(',').map(d => d.trim()) 
+            : [];
+            
+        setCurrentTraining({
+            ...training,
+            departments: departmentsArray, // Add departments to fallback too
+            participants: training.participants?.map(p => p.employee_id) || []
+        });
+        
+        setErrors({});
+        setIsEditModalOpen(true);
+    }
+};
+   const handleViewClick = async (training) => {
+    try {
+        // Fetch full training details
+        const response = await axios.get(`/trainings/${training.id}`);
+        console.log('Full training data in view:', response.data);
+        console.log('Trainer data received:', response.data.trainer);
+        
+        // Convert department string to array for view display
+        const departmentsArray = response.data.department 
+            ? response.data.department.split(',').map(d => d.trim()) 
+            : [];
+            
+        setCurrentTraining({
+            ...response.data,
+            departments: departmentsArray // Add departments array for view mode
+        });
+        
+        setIsViewModalOpen(true);
+    } catch (error) {
+        console.error('Error fetching training details:', error);
+        
+        // Fallback with conversion
+        const departmentsArray = training.department 
+            ? training.department.split(',').map(d => d.trim()) 
+            : [];
+            
+        setCurrentTraining({
+            ...training,
+            departments: departmentsArray
+        });
+        
+        setIsViewModalOpen(true);
+    }
+};
+  const handleCreateSubmit = async (e) => {
+    e.preventDefault();
+    setErrors({});
+    
+    try {
+        // Debug trainer data
+        console.log('Trainer data before submit:', {
+            id: currentTraining.trainer_id,
+            type: typeof currentTraining.trainer_id
+        });
+        
+        // Prepare training data with proper field mapping and explicit type conversions
+        const trainingData = {
+            title: currentTraining.title || '',
+            description: currentTraining.description || '',
+            training_type_id: currentTraining.training_type_id 
+                ? parseInt(currentTraining.training_type_id, 10) 
+                : null,
+            // Fix: Convert departments array to string for the API
+            department: currentTraining.departments && currentTraining.departments.length > 0
+                ? currentTraining.departments.join(', ') 
+                : 'General',
+            start_date: currentTraining.start_date 
+                ? moment(currentTraining.start_date).format('YYYY-MM-DD HH:mm:ss') 
+                : null,
+            end_date: currentTraining.end_date 
+                ? moment(currentTraining.end_date).format('YYYY-MM-DD HH:mm:ss') 
+                : null,
+            location: currentTraining.location || '',
+            trainer_id: currentTraining.trainer_id 
+                ? parseInt(currentTraining.trainer_id, 10) 
+                : null,
+            max_participants: currentTraining.max_participants 
+                ? parseInt(currentTraining.max_participants, 10) 
+                : null,
+            materials_link: currentTraining.materials_link || '',
+            status: currentTraining.status || 'Scheduled'
+        };
+        
+        // Handle participants separately
+        if (currentTraining.participants && currentTraining.participants.length > 0) {
+            trainingData.participants = currentTraining.participants.map(id => 
+                typeof id === 'string' ? parseInt(id, 10) : id
+            );
+        }
+        
+        // Debug the exact data being sent
+        console.log('Sending training data:', JSON.stringify(trainingData, null, 2));
+        
+        // Create training
+        const response = await axios.post('/trainings', trainingData);
+        
+        // Update trainings list
+        await loadData();
+        
+        // Reset form and close modal
+        setCurrentTraining(emptyTraining);
+        setIsCreateModalOpen(false);
+        
+        showToast('Training created successfully');
+    } catch (error) {
+        console.error('Error creating training:', error);
+        
+        if (error.response?.status === 422 && error.response?.data?.errors) {
+            setErrors(error.response.data.errors);
+            
+            // Detailed error logging
+            console.log('Validation errors:', error.response.data.errors);
+            console.log('Full error response:', error.response.data);
+            
+            const errorMessages = Object.values(error.response.data.errors).flat().join(', ');
+            showToast(`Validation error: ${errorMessages}`, 'error');
+        } else {
+            showToast(error.response?.data?.message || 'Error creating training', 'error');
+        }
+    }
+};
     // Handle updating training (WITH DEPARTMENT HANDLING)
-    const handleUpdateSubmit = async (e) => {
-        e.preventDefault();
-        setErrors({});
-        
-        try {
-            // Prepare training data
-            const trainingData = {
-                title: currentTraining.title,
-                description: currentTraining.description,
-                training_type_id: parseInt(currentTraining.training_type_id) || null,
-                department: currentTraining.department || '',  // Department from dropdown
-                start_date: currentTraining.start_date ? moment(currentTraining.start_date).format('YYYY-MM-DD HH:mm:ss') : null,
-                end_date: currentTraining.end_date ? moment(currentTraining.end_date).format('YYYY-MM-DD HH:mm:ss') : null,
-                location: currentTraining.location,
-                trainer: currentTraining.trainer,
-                max_participants: currentTraining.max_participants ? parseInt(currentTraining.max_participants) : null,
-                materials_link: currentTraining.materials_link,
-                status: currentTraining.status || 'Scheduled',
-                participants: currentTraining.participants || []
-            };
-            
-            console.log('Updating training data:', trainingData);
-            
-            const response = await axios.put(`/trainings/${currentTraining.id}`, trainingData);
-            
-            // Update trainings list
-            await loadData();
-            
-            // Reset form and close modal
-            setCurrentTraining(emptyTraining);
-            setIsEditModalOpen(false);
-            
-            showToast('Training updated successfully');
-        } catch (error) {
-            console.error('Error updating training:', error);
-            
-            if (error.response?.status === 422 && error.response?.data?.errors) {
-                setErrors(error.response.data.errors);
-                const errorMessages = Object.values(error.response.data.errors).flat().join(', ');
-                showToast(`Validation error: ${errorMessages}`, 'error');
-            } else {
-                showToast(error.response?.data?.message || 'Error updating training', 'error');
-            }
-        }
-    };
+  // Handle updating training
+const handleUpdateSubmit = async (e) => {
+    e.preventDefault();
+    setErrors({});
     
+    try {
+        // Prepare training data
+        const trainingData = {
+            title: currentTraining.title || '',
+            description: currentTraining.description || '',
+            training_type_id: currentTraining.training_type_id ? parseInt(currentTraining.training_type_id) : null,
+           department: currentTraining.departments && currentTraining.departments.length > 0
+                ? currentTraining.departments.join(', ')  // Join array into comma-separated string
+                : 'General',  
+            start_date: currentTraining.start_date ? moment(currentTraining.start_date).format('YYYY-MM-DD HH:mm:ss') : null,
+            end_date: currentTraining.end_date ? moment(currentTraining.end_date).format('YYYY-MM-DD HH:mm:ss') : null,
+            location: currentTraining.location || '',
+            trainer_id: currentTraining.trainer_id ? parseInt(currentTraining.trainer_id) : null,
+            max_participants: currentTraining.max_participants ? parseInt(currentTraining.max_participants) : null,
+            materials_link: currentTraining.materials_link || '',
+            status: currentTraining.status || 'Scheduled'
+        };
+        
+        // Handle participants separately
+        if (currentTraining.participants && currentTraining.participants.length > 0) {
+            trainingData.participants = currentTraining.participants;
+        }
+        
+        console.log('Updating training data:', trainingData);
+        
+        const response = await axios.put(`/trainings/${currentTraining.id}`, trainingData);
+        
+        // Update trainings list
+        await loadData();
+        
+        // Reset form and close modal
+        setCurrentTraining(emptyTraining);
+        setIsEditModalOpen(false);
+        
+        showToast('Training updated successfully');
+    } catch (error) {
+        console.error('Error updating training:', error);
+        
+        if (error.response?.status === 422 && error.response?.data?.errors) {
+            setErrors(error.response.data.errors);
+            
+            // More detailed error logging
+            console.log('Validation errors:', error.response.data.errors);
+            
+            const errorMessages = Object.values(error.response.data.errors).flat().join(', ');
+            showToast(`Validation error: ${errorMessages}`, 'error');
+        } else {
+            showToast(error.response?.data?.message || 'Error updating training', 'error');
+        }
+    }
+};
     // Handle deleting training
     const handleDeleteClick = (training) => {
         setConfirmModal({
@@ -1360,49 +1477,51 @@ const Training = ({ auth, trainings: initialTrainings, counts, trainingTypes, em
                 </div>
             </div>
 
-            {/* Training Modals - Pass departments to each modal */}
-            <TrainingModal
-                isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                title="Create New Training"
-                training={currentTraining}
-                trainingTypes={trainingTypes}
-                employees={employees}
-                departments={departments} // Pass departments here
-                onChange={setCurrentTraining}
-                onSubmit={handleCreateSubmit}
-                mode="create"
-                errorMessages={errors}
-            />
+           {/* Training Modals */}
+<TrainingModal
+    isOpen={isCreateModalOpen}
+    onClose={() => setIsCreateModalOpen(false)}
+    title="Create New Training"
+    training={currentTraining}
+    trainingTypes={trainingTypes}
+    employees={employees}
+    departments={departments}
+    trainers={trainers} // Make sure trainers prop is passed correctly
+    onChange={setCurrentTraining}
+    onSubmit={handleCreateSubmit}
+    mode="create"
+    errorMessages={errors}
+/>
 
-            <TrainingModal
-                isOpen={isEditModalOpen}
-                onClose={() => setIsEditModalOpen(false)}
-                title="Edit Training"
-                training={currentTraining}
-                trainingTypes={trainingTypes}
-                employees={employees}
-                departments={departments} // Pass departments here
-                onChange={setCurrentTraining}
-                onSubmit={handleUpdateSubmit}
-                mode="edit"
-                errorMessages={errors}
-            />
+<TrainingModal
+    isOpen={isEditModalOpen}
+    onClose={() => setIsEditModalOpen(false)}
+    title="Edit Training"
+    training={currentTraining}
+    trainingTypes={trainingTypes}
+    employees={employees}
+    departments={departments}
+    trainers={trainers} // Make sure trainers prop is passed correctly
+    onChange={setCurrentTraining}
+    onSubmit={handleUpdateSubmit}
+    mode="edit"
+    errorMessages={errors}
+/>
 
-            <TrainingModal
-                isOpen={isViewModalOpen}
-                onClose={() => setIsViewModalOpen(false)}
-                title="View Training Details"
-                training={currentTraining}
-                trainingTypes={trainingTypes}
-                employees={employees}
-                departments={departments} // Pass departments here
-                onChange={setCurrentTraining}
-                onSubmit={() => {}}
-                mode="view"
-                errorMessages={{}}
-            />
-
+<TrainingModal
+    isOpen={isViewModalOpen}
+    onClose={() => setIsViewModalOpen(false)}
+    title="View Training Details"
+    training={currentTraining}
+    trainingTypes={trainingTypes}
+    employees={employees}
+    departments={departments}
+    trainers={trainers} // Make sure trainers prop is passed correctly
+    onChange={setCurrentTraining}
+    onSubmit={() => {}}
+    mode="view"
+    errorMessages={{}}
+/>
             {/* Confirm Modal */}
             <ConfirmModal
                 isOpen={confirmModal.isOpen}

@@ -630,116 +630,119 @@ const handleUpdateSubmit = async (e) => {
                                 )}
 
                                 {/* Training Types Grid */}
-                                {/* Enhanced Training Types Grid */}
+                               {/* Training Types List */}
 {!loading && filteredTrainingTypes.length > 0 && (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTrainingTypes.map(type => (
-            <div 
-                key={type.id}
-                className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100 transform hover:-translate-y-1"
-            >
-                {/* Training Type Image or Header */}
-                {type.image_url ? (
-                    <div className="h-48 relative">
-                        <img 
-                            src={type.image_url} 
-                            alt={type.name}
-                            className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-                        <div className="absolute bottom-0 left-0 right-0 p-4">
-                            <span className="text-xl font-bold text-white flex items-center">
-                                <BookOpen className="w-5 h-5 mr-2 text-blue-300" />
-                                {type.name}
-                            </span>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="h-20 bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center justify-between p-4">
-                        <span className="text-xl font-bold text-white flex items-center">
-                            <BookOpen className="w-5 h-5 mr-2" />
-                            {type.name}
-                        </span>
-                        <div className={`px-2 py-1 text-xs font-medium rounded-full ${type.is_active ? 'bg-green-400 text-green-900' : 'bg-gray-300 text-gray-800'}`}>
-                            {type.is_active ? 'Active' : 'Inactive'}
-                        </div>
-                    </div>
-                )}
-                
-                {/* Training Type Details */}
-                <div className="p-5">
-                    {type.image_url && (
-                        <div className="flex items-center mb-4">
-                            <div className={`px-3 py-1 text-xs font-semibold rounded-full ${type.is_active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
-                                {type.is_active ? 'Active' : 'Inactive'}
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+                <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Description
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+                {filteredTrainingTypes.map(type => (
+                    <tr key={type.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                                {type.image_url ? (
+                                    <div className="flex-shrink-0 h-10 w-10 mr-4">
+                                        <img 
+                                            src={type.image_url} 
+                                            alt={type.name}
+                                            className="h-10 w-10 rounded-full object-cover"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex-shrink-0 h-10 w-10 mr-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center">
+                                        <BookOpen className="h-5 w-5 text-white" />
+                                    </div>
+                                )}
+                                <div className="text-sm font-medium text-gray-900">
+                                    {type.name}
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    
-                    {type.description && (
-                        <div className="mb-4">
-                            <h3 className="text-sm font-medium text-gray-500 mb-1">Description</h3>
-                            <p className="text-sm text-gray-700">
-                                {type.description.length > 100 
-                                    ? `${type.description.substring(0, 100)}...` 
-                                    : type.description}
-                            </p>
-                        </div>
-                    )}
-                    
-                    {/* Actions */}
-                    <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between">
-                        <div className="flex space-x-1">
-                            <button
-                                onClick={() => handleViewClick(type)}
-                                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                                title="View Details"
-                                type="button"
-                            >
-                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                            </button>
-                            
-                            <button
-                                onClick={() => handleEditClick(type)}
-                                className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-colors"
-                                title="Edit"
-                                type="button"
-                            >
-                                <Edit className="h-5 w-5" />
-                            </button>
-                            
-                            <button
-                                onClick={() => handleDeleteClick(type)}
-                                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                                title="Delete"
-                                type="button"
-                            >
-                                <Trash2 className="h-5 w-5" />
-                            </button>
-                        </div>
-                        
-                        <button
-                            onClick={() => handleToggleActive(type)}
-                            className={`p-2 rounded-full ${type.is_active 
-                                ? 'text-green-600 hover:bg-green-50' 
-                                : 'text-gray-500 hover:bg-gray-50'}`}
-                            title={type.is_active ? 'Deactivate' : 'Activate'}
-                            type="button"
-                        >
-                            {type.is_active ? 
-                                <ToggleRight className="h-6 w-6" /> : 
-                                <ToggleLeft className="h-6 w-6" />
-                            }
-                        </button>
-                    </div>
-                </div>
-            </div>
-        ))}
+                        </td>
+                        <td className="px-6 py-4">
+                            <div className="text-sm text-gray-500 max-w-xs truncate">
+                                {type.description || 'No description provided'}
+                            </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                type.is_active 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-gray-100 text-gray-800'
+                            }`}>
+                                {type.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                                <button
+                                    onClick={() => handleViewClick(type)}
+                                    className="text-gray-500 hover:text-blue-600 p-1 rounded"
+                                    title="View Details"
+                                    type="button"
+                                >
+                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                </button>
+                                
+                                <button
+                                    onClick={() => handleEditClick(type)}
+                                    className="text-gray-500 hover:text-amber-600 p-1 rounded"
+                                    title="Edit"
+                                    type="button"
+                                >
+                                    <Edit className="h-5 w-5" />
+                                </button>
+                                
+                                <button
+                                    onClick={() => handleDeleteClick(type)}
+                                    className="text-gray-500 hover:text-red-600 p-1 rounded"
+                                    title="Delete"
+                                    type="button"
+                                >
+                                    <Trash2 className="h-5 w-5" />
+                                </button>
+                                
+                                <button
+                                    onClick={() => handleToggleActive(type)}
+                                    className={`p-1 rounded ${
+                                        type.is_active 
+                                            ? 'text-green-600 hover:text-green-800' 
+                                            : 'text-gray-500 hover:text-gray-800'
+                                    }`}
+                                    title={type.is_active ? 'Deactivate' : 'Activate'}
+                                    type="button"
+                                >
+                                    {type.is_active ? 
+                                        <ToggleRight className="h-5 w-5" /> : 
+                                        <ToggleLeft className="h-5 w-5" />
+                                    }
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
     </div>
 )}
+       
                             </div>
                         </div>
                     </div>
